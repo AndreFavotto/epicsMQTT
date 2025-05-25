@@ -22,9 +22,12 @@
 # the CONFIG_SITE file.
 
 # Variables and paths to dependent modules:
-#MODULES = /path/to/modules
-#MYMODULE = $(MODULES)/my-module
-
+MODULES = /opt/epics/support
+ASYN = $(MODULES)/asyn-R4-45
+AUTOPARAM = $(MODULES)/autoparamDriver-2.0.0
+# Paho MQTT paths
+PAHO_CPP_INC = /usr/local/include
+PAHO_CPP_LIB = /usr/local/lib
 # If using the sequencer, point SNCSEQ at its top directory:
 #SNCSEQ = $(MODULES)/seq-ver
 
