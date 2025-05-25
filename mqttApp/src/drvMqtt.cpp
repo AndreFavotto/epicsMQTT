@@ -136,47 +136,111 @@ MqttDriver::~MqttDriver() {
 template <typename epicsDataType>
 Result<epicsDataType> MqttDriver::integerRead(DeviceVariable &deviceVar){
   Result<epicsDataType> result;
+  asynStatus status = asynError;
   const char * functionName = __FUNCTION__;
-  MqttTopicAddr const &topicName =
+  MqttTopicAddr const &addr =
         static_cast<MqttTopicAddr const &>(deviceVar.address());
- std::string format = deviceVar.function();
+  std::string topicName = addr.topicName;
   MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
-  epicsDataType value;
-  result.status = asynError;
-  result.value = static_cast<epicsInt32>(value);
+  /*
+  since we cannot actively read MQTT topics due to the publish/subscribe
+  nature of MQTT - handled as I/O Intr - if a read is requested, we just 
+  return what is currently stored in the asyn parameter memory
+  */
+  epicsInt32 value;
+  status = driver->getIntegerParam(deviceVar.asynIndex(), &value);
+
+  if (status != asynSuccess) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s::%s: Failed to get value for param index %d (topic: '%s')\n",
+            driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+  }
+  result.value = value;
+  result.status = status;
   return result;
 }
 
 template <typename epicsDataType>
 WriteResult MqttDriver::integerWrite(DeviceVariable &deviceVar, epicsDataType value){
   WriteResult result;
+  asynStatus status = asynError;
   const char * functionName = __FUNCTION__;
-  MqttTopicAddr const &topicName =
+  MqttTopicAddr const &addr =
       static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
   MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
-  std::string format = deviceVar.function();
-  result.status = asynError;
+
+  if(addr.format == MqttTopicAddr::TopicFormat::Flat){
+    try {
+      driver->mqttClient.publish(addr.topicName, std::to_string(value));
+      status = asynSuccess;
+    }
+    catch (const std::exception &exc) {
+      status = asynError;
+    }
+  }
+
+  else if(addr.format == MqttTopicAddr::TopicFormat::Json){
+    //Not implemented
+    status = asynError;
+  }
+
+  if (status != asynSuccess) {
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s::%s: Failed to get value for param index %d (topic: '%s')\n",
+            driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+  }
+  result.status = status;
   return result;
 }
 UInt32ReadResult MqttDriver::digitalRead(DeviceVariable &deviceVar, epicsUInt32 const mask){
   UInt32ReadResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
 WriteResult MqttDriver::digitalWrite(DeviceVariable &deviceVar, epicsUInt32 const value, epicsUInt32 const mask){
   WriteResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
 
 Float64ReadResult MqttDriver::floatRead(DeviceVariable &deviceVar){
   Float64ReadResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
 WriteResult MqttDriver::floatWrite(DeviceVariable &deviceVar, epicsFloat64 value){
   WriteResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
 
@@ -184,25 +248,53 @@ WriteResult MqttDriver::floatWrite(DeviceVariable &deviceVar, epicsFloat64 value
 template <typename epicsDataType>
 ArrayReadResult MqttDriver::arrayRead(DeviceVariable &deviceVar, Array<epicsDataType> &value){
   ArrayReadResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
 template <typename epicsDataType>
 WriteResult MqttDriver::arrayWrite(DeviceVariable &deviceVar, Array<epicsDataType> const &value){
   WriteResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
 
 // strings
 OctetReadResult MqttDriver::stringRead(DeviceVariable &deviceVar, Octet &value){
   OctetReadResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
 WriteResult MqttDriver::stringWrite(DeviceVariable &deviceVar, Octet const &value){
   WriteResult result;
-  result.status = asynError;
+  asynStatus status = asynError;
+  const char * functionName = __FUNCTION__;
+  MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+  std::string topicName = addr.topicName;
+  MqttDriver *driver = static_cast<MqttTopicVariable &>(deviceVar).driver;
+
+  result.status = status;
   return result;
 }
   //#############################################################################################
