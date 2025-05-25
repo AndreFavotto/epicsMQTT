@@ -22,6 +22,7 @@ class MqttDriver : public Autoparam::Driver {
     ~MqttDriver(); 
 
   protected:
+    static void initHook(Autoparam::Driver *driver);
     // read/write for scalars
     template <typename epicsDataType>
     static Result<epicsDataType> integerRead(DeviceVariable &deviceVar);
@@ -42,6 +43,8 @@ class MqttDriver : public Autoparam::Driver {
     // strings
     static OctetReadResult stringRead(DeviceVariable &deviceVar, Octet &value);
     static WriteResult stringWrite(DeviceVariable &deviceVar, Octet const &value);
+    // Interrupt callback
+    static void handleMqttMessage(Autoparam::Driver *driver, const std::string& topic, const std::string& payload);
 
   private:
     MqttClient mqttClient;

@@ -9,11 +9,11 @@ dbLoadDatabase "dbd/mqtt.dbd"
 mqtt_registerRecordDeviceDriver pdbbase
 
 epicsEnvSet("PORT", "test")
-epicsEnvSet("BROKER_URL", "mqtt://localhost:1883")
+epicsEnvSet("BROKER_URL", "mqtt://172.25.123.141:1883")
 epicsEnvSet("CLIENT_ID", "mqttEpics")
 epicsEnvSet("QOS", "1")
-epicsEnvSet("P", "p:")
-epicsEnvSet("R", "r:")
+epicsEnvSet("P", "test:")
+epicsEnvSet("R", "mqtt:")
 
 mqttDriverConfigure($(PORT), $(BROKER_URL), $(CLIENT_ID), $(QOS))
 

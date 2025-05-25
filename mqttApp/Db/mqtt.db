@@ -1,13 +1,14 @@
-record(ai, "$(P)$(R)ai"){
+record(ai, "$(P)$(R)AnalogIn"){
   field(DESC, "Analog Input Record")
   field(DTYP, "asynInt32")
-  field(INP, "@asyn($(PORT)) FLAT:INT test/analogtopic)")
+  field(SCAN, "I/O Intr")
+  field(INP, "@asyn($(PORT)) FLAT:INT test/analogtopic")
 }
 
-record(ao, "$(P)$(R)ao"){
+record(ao, "$(P)$(R)AnalogOut"){
   field(DESC, "Analog Out Record")
   field(DTYP, "asynInt32")
-  field(OUT, "@asyn($(PORT)) FLAT:INT test/analogtopic)")
+  field(OUT, "@asyn($(PORT)) FLAT:INT test/analogtopic")
 }
 
 # record(ai, "$(P)$(R)AnalogInput"){

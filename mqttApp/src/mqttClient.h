@@ -8,7 +8,7 @@
 class MqttClient : public virtual mqtt::callback, public virtual mqtt::iaction_listener {
   public:
       struct Config {
-          std::string brokerUrl = "tcp://localhost:1883";
+          std::string brokerUrl = "mqtt://localhost:1883";
           std::string clientId = "MqttClient";
           int qos = 1;
           int keepAliveInterval = 20;

@@ -51,8 +51,9 @@ DeviceAddress *MqttDriver::parseDeviceAddress(std::string const &function, std::
       is >> addr->jsonField;
     }
     else {
+      // unknown prefix
       delete addr;
-      return nullptr;  // unknown prefix
+      return nullptr;
     }
 
     return addr;
@@ -61,6 +62,7 @@ DeviceAddress *MqttDriver::parseDeviceAddress(std::string const &function, std::
 DeviceVariable *MqttDriver::createDeviceVariable(DeviceVariable *baseVar){
   return new MqttTopicVariable(this, baseVar);
 }
+
 //#############################################################################################
 
 /* Class constructor
@@ -76,7 +78,7 @@ MqttDriver::MqttDriver(const char *portName, const char *brokerUrl, const char *
         Autoparam::DriverOpts()
                   .setBlocking(false)
                   .setAutoInterrupts(false)
-                  .setInitHook(NULL)),
+                  .setInitHook(initHook)),
         mqttClient([&]{
          MqttClient::Config cfg;
          cfg.brokerUrl = brokerUrl;
@@ -125,6 +127,60 @@ MqttDriver::~MqttDriver() {
     mqttClient.disconnect();
 }
 
+void MqttDriver::initHook(Autoparam::Driver *driver) {
+  auto *pself = static_cast<MqttDriver *>(driver);
+  auto vars = pself->getInterruptVariables();
+  // Subscribe to all I/O Intr topics
+  for (auto itr = vars.begin(); itr != vars.end(); itr++) {
+    auto &deviceVar = *static_cast<MqttTopicVariable *>(*itr);
+    MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+    pself->mqttClient.subscribe(addr.topicName);
+  }
+  pself->mqttClient.setMessageCallback([pself](const std::string& topic, const std::string& payload) {
+    pself->handleMqttMessage(pself, topic, payload);
+  });
+}
+
+void MqttDriver::handleMqttMessage(Autoparam::Driver *driver, const std::string& topic, const std::string& payload) {
+    auto *pself = static_cast<MqttDriver *>(driver);
+    pself->lock();
+    auto vars = pself->getInterruptVariables();
+    // Subscribe to all I/O Intr topics
+    for (auto itr = vars.begin(); itr != vars.end(); itr++) {
+      auto &deviceVar = *static_cast<MqttTopicVariable *>(*itr);
+      MqttTopicAddr const &addr =
+      static_cast<MqttTopicAddr const &>(deviceVar.address());
+        if (addr.topicName != topic)
+          continue;
+          int index = deviceVar.asynIndex();
+          switch (deviceVar.asynType()) {
+            case asynParamInt32:
+                pself->setParam(deviceVar, std::stoi(payload), asynSuccess);
+                break;
+            case asynParamFloat64:
+                pself->setParam(deviceVar, std::stod(payload), asynSuccess);
+                break;
+            case asynParamUInt32Digital:
+                pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
+                break;
+            case asynParamOctet:
+                // use asyn directly - setParam octet overload is not defined
+                pself->setStringParam(index, payload.c_str());
+                break;
+            case asynParamInt32Array:
+                // not implemented
+                break;
+            case asynParamFloat64Array:
+                // not implemented
+                break;
+            default:
+                break;
+        }
+    }
+    pself->callParamCallbacks();
+    pself->unlock();
+}
 //#############################################################################################
 // IO function definitions
 template <typename epicsDataType>
