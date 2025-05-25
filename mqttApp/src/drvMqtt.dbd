@@ -1,1 +1,1 @@
-registrar("drvMqttRegister")
+registrar("mqttDriverRegister")

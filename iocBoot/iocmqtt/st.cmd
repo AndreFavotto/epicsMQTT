@@ -1,8 +1,5 @@
 #!../../bin/linux-x86_64/mqtt
 
-#- You may have to change mqtt to something else
-#- everywhere it appears in this file
-
 < envPaths
 
 cd "${TOP}"
@@ -11,11 +8,16 @@ cd "${TOP}"
 dbLoadDatabase "dbd/mqtt.dbd"
 mqtt_registerRecordDeviceDriver pdbbase
 
-## Load record instances
-#dbLoadRecords("db/mqtt.db","user=andrefavotto")
+epicsEnvSet("PORT", "test")
+epicsEnvSet("BROKER_URL", "mqtt://localhost:1883")
+epicsEnvSet("CLIENT_ID", "mqttEpics")
+epicsEnvSet("QOS", "1")
+epicsEnvSet("P", "p:")
+epicsEnvSet("R", "r:")
 
+mqttDriverConfigure($(PORT), $(BROKER_URL), $(CLIENT_ID), $(QOS))
+
+## Load record instances
+dbLoadRecords("${TOP}/mqttApp/Db/mqtt.db", "P=$(P), R=$(R), PORT=$(PORT)")
 cd "${TOP}/iocBoot/${IOC}"
 iocInit
-
-## Start any sequence programs
-#seq sncxxx,"user=andrefavotto"

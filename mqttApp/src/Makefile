@@ -15,6 +15,7 @@ DBD += mqtt.dbd
 # mqtt.dbd will be made up from these files:
 mqtt_DBD += base.dbd
 mqtt_DBD += asyn.dbd
+mqtt_DBD += drvMqtt.dbd
 
 # Include dbd files from all support applications:
 #mqtt_DBD += xxx.dbd

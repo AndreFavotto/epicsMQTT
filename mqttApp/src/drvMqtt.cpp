@@ -1,8 +1,22 @@
 #include "drvMqtt.h"
 #include "mqttClient.h"
 
-#define FLAT_FUNCTION_STR "FLAT"
-#define JSON_FUNCTION_STR "JSON"
+// Supported type definitions
+
+#define FLAT_FUNC_PREFIX "FLAT"
+#define JSON_FUNC_PREFIX "JSON"
+#define FLAT_INT_FUNC_STR         FLAT_FUNC_PREFIX ":INT"
+#define FLAT_FLOAT_FUNC_STR       FLAT_FUNC_PREFIX ":FLOAT"
+#define FLAT_DIGITAL_FUNC_STR     FLAT_FUNC_PREFIX ":DIGITAL"
+#define FLAT_STRING_FUNC_STR      FLAT_FUNC_PREFIX ":STRING"
+#define FLAT_INTARRAY_FUNC_STR    FLAT_FUNC_PREFIX ":INTARRAY"
+#define FLAT_FLOATARRAY_FUNC_STR  FLAT_FUNC_PREFIX ":FLOATARRAY"
+#define JSON_INT_FUNC_STR         JSON_FUNC_PREFIX ":INT"
+#define JSON_FLOAT_FUNC_STR       JSON_FUNC_PREFIX ":FLOAT"
+#define JSON_DIGITAL_FUNC_STR     JSON_FUNC_PREFIX ":DIGITAL"
+#define JSON_STRING_FUNC_STR      JSON_FUNC_PREFIX ":STRING"
+#define JSON_INTARRAY_FUNC_STR    JSON_FUNC_PREFIX ":INTARRAY"
+#define JSON_FLOATARRAY_FUNC_STR  JSON_FUNC_PREFIX ":FLOATARRAY"
 //#############################################################################################
 // autoParam-specific definitions
 
@@ -22,19 +36,23 @@ bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
 DeviceAddress *MqttDriver::parseDeviceAddress(std::string const &function, std::string const &arguments) {
     MqttTopicAddr *addr = new MqttTopicAddr;
     std::istringstream is(arguments);
+    // Split function into prefix and type by ':'
+    auto pos = function.find(':');
+    std::string prefix = (pos == std::string::npos) ? function : function.substr(0, pos);
+    std::string type = (pos == std::string::npos) ? "" : function.substr(pos + 1);
     //TODO: add error handling for malformed arguments
-    if (function == FLAT_FUNCTION_STR) {
-        addr->format = MqttTopicAddr::Flat;
-        is >> addr->topicName;
-        //subscribe to topic here?
-    } else if (function == JSON_FUNCTION_STR) {
-        addr->format = MqttTopicAddr::Json;
-        is >> addr->topicName;
-        is >> addr->jsonField;
-        //subscribe to topic and link to json parser
-    } else {
-        delete addr;
-        return NULL;
+    if (prefix == FLAT_FUNC_PREFIX) {
+      addr->format = MqttTopicAddr::Flat;
+      is >> addr->topicName;
+    } 
+    else if (prefix == JSON_FUNC_PREFIX) {
+      addr->format = MqttTopicAddr::Json;
+      is >> addr->topicName;
+      is >> addr->jsonField;
+    }
+    else {
+      delete addr;
+      return nullptr;  // unknown prefix
     }
 
     return addr;
@@ -82,29 +100,22 @@ MqttDriver::MqttDriver(const char *portName, const char *brokerUrl, const char *
     // Array<epicsFloat64> → asynParamFloat64Array
 
     // flat topic support
-    registerHandlers<epicsInt32>(FLAT_FUNCTION_STR, integerRead, integerWrite, NULL);
-    registerHandlers<epicsInt64>(FLAT_FUNCTION_STR, integerRead, integerWrite, NULL);
-    registerHandlers<epicsFloat64>(FLAT_FUNCTION_STR, floatRead, floatWrite, NULL);
-    registerHandlers<epicsUInt32>(FLAT_FUNCTION_STR, digitalRead, digitalWrite, NULL);
-    registerHandlers<Octet>(FLAT_FUNCTION_STR, stringRead, stringWrite, NULL);
-    registerHandlers<Array<epicsInt8>>(FLAT_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsInt16>>(FLAT_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsInt32>>(FLAT_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsFloat32>>(FLAT_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsFloat64>>(FLAT_FUNCTION_STR, arrayRead, arrayWrite, NULL);
+    registerHandlers<epicsInt32>(FLAT_INT_FUNC_STR, integerRead, integerWrite, NULL);
+    registerHandlers<epicsFloat64>(FLAT_FLOAT_FUNC_STR, floatRead, floatWrite, NULL);
+    registerHandlers<epicsUInt32>(FLAT_DIGITAL_FUNC_STR, digitalRead, digitalWrite, NULL);
+    registerHandlers<Octet>(FLAT_STRING_FUNC_STR, stringRead, stringWrite, NULL);
+    registerHandlers<Array<epicsInt32>>(FLAT_INTARRAY_FUNC_STR, arrayRead, arrayWrite, NULL);
+    registerHandlers<Array<epicsFloat64>>(FLAT_FLOATARRAY_FUNC_STR, arrayRead, arrayWrite, NULL);
 
     // json topic support
+    registerHandlers<epicsInt32>(JSON_INT_FUNC_STR, integerRead, integerWrite, NULL);
+    registerHandlers<epicsFloat64>(JSON_FLOAT_FUNC_STR, floatRead, floatWrite, NULL);
+    registerHandlers<epicsUInt32>(JSON_DIGITAL_FUNC_STR, digitalRead, digitalWrite, NULL);
+    registerHandlers<Octet>(JSON_STRING_FUNC_STR, stringRead, stringWrite, NULL);
+    registerHandlers<Array<epicsInt32>>(JSON_INTARRAY_FUNC_STR, arrayRead, arrayWrite, NULL);
+    registerHandlers<Array<epicsFloat64>>(JSON_FLOATARRAY_FUNC_STR, arrayRead, arrayWrite, NULL);
+
     //TODO: add support for JSON structured messages
-    registerHandlers<epicsInt32>(JSON_FUNCTION_STR, integerRead, integerWrite, NULL);
-    registerHandlers<epicsInt64>(JSON_FUNCTION_STR, integerRead, integerWrite, NULL);
-    registerHandlers<epicsFloat64>(JSON_FUNCTION_STR, floatRead, floatWrite, NULL);
-    registerHandlers<epicsUInt32>(JSON_FUNCTION_STR, digitalRead, digitalWrite, NULL);
-    registerHandlers<Octet>(JSON_FUNCTION_STR, stringRead, stringWrite, NULL);
-    registerHandlers<Array<epicsInt8>>(JSON_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsInt16>>(JSON_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsInt32>>(JSON_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsFloat32>>(JSON_FUNCTION_STR, arrayRead, arrayWrite, NULL);
-    registerHandlers<Array<epicsFloat64>>(JSON_FUNCTION_STR, arrayRead, arrayWrite, NULL);
     std::this_thread::sleep_for(std::chrono::seconds(2));
   }
 /* Class destructor

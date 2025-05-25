@@ -1,9 +1,17 @@
-record(ai, "$(P)$(R)AnalogInput"){
+record(ai, "$(P)$(R)ai"){
   field(DESC, "Analog Input Record")
-  field(INP, "@asyn($(PORT) VALUE test/analogtopic)")
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT)) FLAT:INT test/analogtopic)")
 }
 
-record(ai, "$(P)$(R)AnalogInput"){
-  field(DESC, "Analog Input Record")
-  field(INP, "@asyn($(PORT) STRUCT test/structtopic value)")
+record(ao, "$(P)$(R)ao"){
+  field(DESC, "Analog Out Record")
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT)) FLAT:INT test/analogtopic)")
 }
+
+# record(ai, "$(P)$(R)AnalogInput"){
+#   field(DESC, "Analog Input Record")
+#   field(DTYP, "asynInt32")
+#   field(INP, "@asyn($(PORT)) JSON test/structtopic value)")
+# }
