@@ -1,19 +1,3 @@
-#include <epicsTimer.h>
-#include <epicsMutex.h>
-#include <epicsEvent.h>
-
-#include <string.h>
-#include <map>
-
-#include <cctype>
-#include <chrono>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
-#include <string>
-#include <thread>
-#include <autoparamDriver.h>
-#include <autoparamHandler.h>
 #include "drvMqtt.h"
 #include "mqttClient.h"
 
@@ -38,7 +22,6 @@ bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
 DeviceAddress *MqttDriver::parseDeviceAddress(std::string const &function, std::string const &arguments) {
     MqttTopicAddr *addr = new MqttTopicAddr;
     std::istringstream is(arguments);
-    is >> std::setbase(0);
     //TODO: add error handling for malformed arguments
     if (function == FLAT_FUNCTION_STR) {
         addr->format = MqttTopicAddr::Flat;
@@ -298,6 +281,7 @@ WriteResult MqttDriver::stringWrite(DeviceVariable &deviceVar, Octet const &valu
   return result;
 }
   //#############################################################################################
+  //EPICS shell script function definition
 extern "C" {
     int mqttDriverConfigure(const char *portName, const char *brokerUrl, const char *mqttClientID, const int qos) {
         new MqttDriver(portName, brokerUrl, mqttClientID, qos);

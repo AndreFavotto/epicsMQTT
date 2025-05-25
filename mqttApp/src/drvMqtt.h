@@ -1,5 +1,5 @@
-#ifndef MQTT_H
-#define MQTT_H
+#ifndef DRVMQTT_H
+#define DRVMQTT_H
 #include <unistd.h>
 #include <iocsh.h>
 #include <epicsExport.h>
@@ -8,7 +8,6 @@
 #include <autoparamHandler.h>
 #include <asynPortDriver.h>
 #include <sstream>
-#include <iomanip>
 #include "mqttClient.h"
 
 using namespace Autoparam::Convenience;
@@ -68,4 +67,4 @@ class MqttTopicVariable : public DeviceVariable {
     MqttDriver *driver;
 };
 
-#endif /* MQTT_H */
+#endif /* DRVMQTT_H */
