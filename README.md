@@ -31,12 +31,12 @@ Developing with:
   - Support for MQTT authentication and TLS.
 
 Built on top of [autoparamDriver](https://epics.cosylab.com/documentation/autoparamDriver/), the device support available is defined by [the standard asyn interfaces](https://epics-modules.github.io/asyn/asynDriver.html#generic-interfaces). For now, the supported interfaces are the following:
-  - `asynParamInt32`
-  - `asynParamFloat64`
-  - `asynParamUint32Digital`
-  - `asynParamOctet`
-  - `asynParamInt32Array`
-  - `asynParamFloat64Array`
+  - `asynInt32`
+  - `asynFloat64`
+  - `asynUInt32Digital`
+  - `asynOctet`
+  - `asynInt32Array`
+  - `asynFloat64Array`
 
 > Note: Virtually all features from the [Paho C++ MQTT client](https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html) are available to be implemented in this driver, so feel free to open an issue if you need a specific feature.
 
@@ -68,7 +68,7 @@ TODO: Add instructions for building and installing the module.
   Where:
   - `<PORT>` is the name of the asyn port defined in the `asynPortDriver` configuration.
   - `<FORMAT>`is the format of the payload, either `FLAT` or `JSON`. For now, only `FLAT` is supported.
-  - `<TYPE>` is the general type of the expected value [`INT|FLOAT|DIGITAL|OCTET|INTARRAY|FLOATARRAY`].  
+  - `<TYPE>` is the general type of the expected value [`INT|FLOAT|DIGITAL|STRING|INTARRAY|FLOATARRAY`].  
   - `<TOPIC>` is the MQTT topic to which the record will be subscribed/published.
   - `<FIELD>` is an optional field name to be used when parsing JSON payloads (not yet implemented).
     
@@ -93,10 +93,9 @@ Below is a table with the supported EPICS types, example of I/O link strings and
 
 | Support Type                | Asyn Parameter Type         | FORMAT:TYPE      | Status      |
 |-----------------------------|----------------------------|------------------|-------------|
-| epicsInt32                  | asynParamInt32             | `FLAT:INT`       | Testing     |
-| epicsFloat64                | asynParamFloat64           | `FLAT:FLOAT`     | In progress |
-| epicsUInt32                 | asynParamUint32Digital     | `FLAT:DIGITAL`   | In progress |
-| Octet                       | asynParamOctet             | `FLAT:OCTET`     | In progress |
-| Array&lt;epicsInt32&gt;     | asynParamInt32Array        | `FLAT:INTARRAY`  | In progress |
-| Array&lt;epicsFloat64&gt;   | asynParamFloat64Array      | `FLAT:FLOATARRAY`| In progress |
-
+| epicsInt32                  | asynInt32             | `FLAT:INT`       | In progress |
+| epicsFloat64                | asynFloat64           | `FLAT:FLOAT`     | In progress |
+| epicsUInt32                 | asynUInt32Digital     | `FLAT:DIGITAL`   | In progress |
+| Octet                       | asynOctet             | `FLAT:STRING`    | In progress |
+| Array&lt;epicsInt32&gt;     | asynInt32Array        | `FLAT:INTARRAY`  | In progress |
+| Array&lt;epicsFloat64&gt;   | asynFloat64Array      | `FLAT:FLOATARRAY`| In progress |
