@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include "mqttClient.h"
 
+// TODO: improve overall error handling
+
 MqttClient::MqttClient(const Config& cfg)
   : client_(cfg.brokerUrl, cfg.clientId), config_(cfg)
 {

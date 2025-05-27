@@ -17,6 +17,12 @@ mqtt_DBD += base.dbd
 mqtt_DBD += asyn.dbd
 mqtt_DBD += drvMqtt.dbd
 
+# PVA Support - commented out for compatibility with EPICS 3
+# mqtt_DBD += PVAServerRegister.dbd
+# mqtt_DBD += qsrv.dbd
+# mqtt_LIBS += qsrv
+# mqtt_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
+
 # Include dbd files from all support applications:
 #mqtt_DBD += xxx.dbd
 
