@@ -64,24 +64,21 @@ For now, the supported interfaces are the following:
    
 ## Usage
 1. Include the module in your IOC build instructions:
-   - Add asyn, autoparam and mqtt to your `configure/RELEASE` file:
+   - Add asyn and mqtt to your `configure/RELEASE` file:
         ```shell
         ## Other definitions ...
         ASYN = /path/to/asyn
-        AUTOPARAM = /path/to/autoparamDriver
         MQTT = /path/to/epicsMqtt
         ## Other definitions ...
         ```
 
-   - Add .dbd and library definitions to your `yourApp/src/Makefile`:
+   - Add the mqtt database definition and include the necessary libraries to your `yourApp/src/Makefile`:
       ```shell
       #### Other commands ...
-      yourIOC_DBD += asyn.dbd
       yourIOC_DBD += mqtt.dbd
       #### Other commands ...
-      test_LIBS += asyn
-      test_LIBS += autoparamDriver
-      test_LIBS += mqtt
+      yourIOC_LIBS += asyn
+      yourIOC_LIBS += mqtt
       ```
 2. In your database file, link the EPICS records and the MQTT topics through the `INP` and `OUT` fields. The syntax is as follows:
   ```shell
