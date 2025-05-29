@@ -35,19 +35,19 @@ bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
 
 DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::string const& arguments) {
   MqttTopicAddr* addr = new MqttTopicAddr;
-  std::istringstream is(arguments);
-  auto pos = function.find(':');
-  std::string prefix = (pos == std::string::npos) ? function : function.substr(0, pos);
-  std::string type = (pos == std::string::npos) ? "" : function.substr(pos + 1);
+  std::istringstream argsStream(arguments);
+  auto colonPos = function.find(':');
+  std::string prefix = (colonPos == std::string::npos) ? function : function.substr(0, colonPos);
+  std::string type = (colonPos == std::string::npos) ? "" : function.substr(colonPos + 1);
   //TODO: add error handling for malformed arguments
   if (prefix == FLAT_FUNC_PREFIX) {
     addr->format = MqttTopicAddr::Flat;
-    is >> addr->topicName;
+    argsStream >> addr->topicName;
   }
   else if (prefix == JSON_FUNC_PREFIX) {
     addr->format = MqttTopicAddr::Json;
-    is >> addr->topicName;
-    is >> addr->jsonField;
+    argsStream >> addr->topicName;
+    argsStream >> addr->jsonField;
   }
   else {
     delete addr;
@@ -145,6 +145,7 @@ void MqttDriver::initHook(Autoparam::Driver* driver) {
 }
 
 void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
+  const char* functionName = __FUNCTION__;
   auto* pself = static_cast<MqttDriver*>(driver);
   pself->lock();
   auto vars = pself->getInterruptVariables();
@@ -154,33 +155,71 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
     if (addr.topicName != topic)
       continue;
     int index = deviceVar.asynIndex();
-    switch (deviceVar.asynType()) {
-      case asynParamInt32:
-        pself->setParam(deviceVar, std::stoi(payload), asynSuccess);
-        break;
-      case asynParamFloat64:
-        pself->setParam(deviceVar, std::stod(payload), asynSuccess);
-        break;
-      case asynParamUInt32Digital:
-        pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
-        break;
-      case asynParamOctet:
-        // use asyn directly - setParam octet overload is not defined
-        pself->setStringParam(index, payload.c_str());
-        break;
-      case asynParamInt32Array:
-        // TODO: implement interrupt support for int32 arrays
-        break;
-      case asynParamFloat64Array:
-        // TODO: implement interrupt support for float64 arrays
-        break;
-      default:
-        break;
+    try {
+      switch (deviceVar.asynType()) {
+        case asynParamInt32:
+          if (!isInteger(payload)) throw std::invalid_argument("Invalid integer");
+          pself->setParam(deviceVar, std::stoi(payload), asynSuccess);
+          break;
+        case asynParamFloat64:
+          if (!isFloat(payload)) throw std::invalid_argument("Invalid float");
+          pself->setParam(deviceVar, std::stod(payload), asynSuccess);
+          break;
+        case asynParamUInt32Digital:
+          // TODO: create checker for UInt
+          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
+          break;
+        case asynParamOctet:
+          // use asyn directly - setParam octet overload is not defined
+          pself->setStringParam(index, payload.c_str());
+          break;
+        case asynParamInt32Array:
+          // TODO: implement interrupt support for int32 arrays
+          throw std::logic_error("asynInt32Array support not implemented");
+          break;
+        case asynParamFloat64Array:
+          // TODO: implement interrupt support for float64 arrays
+          throw std::logic_error("asynFloat64Array support not implemented");
+          break;
+        default:
+          break;
+      }
+    }
+    catch (const std::exception& e) {
+      asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
+        "%s::%s:%s: Unexpected value received for topic: '%s': %s)\n",
+        driverName, functionName, e.what(), addr.topicName.c_str(), payload.c_str());
     }
   }
   pself->callParamCallbacks();
   pself->unlock();
 }
+//#############################################################################################
+// Helper methods
+
+/* Checks if a string represents a signed integer */
+bool MqttDriver::isInteger(const std::string& s) {
+  if (s.empty()) return false;
+  size_t i = 0;
+  if (s[i] == '-' || s[i] == '+') ++i;
+  if (i == s.size()) return false; // message has only sign, no digits
+  for (; i < s.size(); ++i) {
+    if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
+  }
+  return true;
+}
+
+/* Checks if a string represents a float */
+bool MqttDriver::isFloat(const std::string& s) {
+  if (s.empty()) return false;
+  size_t i = 0;
+  if (s[i] == '-' || s[i] == '+') ++i;
+  if (i == s.size()) return false;
+  char* end = nullptr;
+  std::strtof(s.c_str(), &end);
+  return end == s.c_str() + s.size();
+}
+
 //#############################################################################################
 // IO function definitions
 

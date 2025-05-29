@@ -26,13 +26,10 @@ protected:
   // read/write for scalars
   static WriteResult integerWrite(DeviceVariable& deviceVar, epicsInt32 value);
   static WriteResult digitalWrite(DeviceVariable& deviceVar, epicsUInt32 const value, epicsUInt32 const mask = 0xffff);
-
   static WriteResult floatWrite(DeviceVariable& deviceVar, epicsFloat64 value);
-
   // read/write for arrays
   template <typename epicsDataType>
   static WriteResult arrayWrite(DeviceVariable& deviceVar, Array<epicsDataType> const& value);
-
   // strings
   static WriteResult stringWrite(DeviceVariable& deviceVar, Octet const& value);
   // Interrupt callback
@@ -43,6 +40,9 @@ private:
   /* autoParam specific methods */
   DeviceAddress* parseDeviceAddress(std::string const& function, std::string const& arguments);
   DeviceVariable* createDeviceVariable(DeviceVariable* baseVar);
+  /* helper methods */
+  static bool isInteger(const std::string& s);
+  static bool isFloat(const std::string& s);
 };
 
 class MqttTopicAddr : public DeviceAddress {
