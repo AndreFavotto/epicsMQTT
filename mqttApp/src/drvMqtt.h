@@ -43,6 +43,8 @@ private:
   /* helper methods */
   static bool isInteger(const std::string& s);
   static bool isFloat(const std::string& s);
+  static bool isSign(char character);
+  static asynStatus checkAndParseIntArray(const std::string& s, std::vector<epicsInt32>& out);
 };
 
 class MqttTopicAddr : public DeviceAddress {

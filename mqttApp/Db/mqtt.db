@@ -49,20 +49,22 @@ record(stringout, "$(P)$(R)StringOutput") {
 #   field(OUT, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
 # }
 
-# record(aai, "$(P)$(R)Int32ArrayInput") {
-#   field(DESC, "Int32 Array Input Record")
-#   field(DTYP, "asynInt32ArrayIn")
-#   field(SCAN, "I/O Intr")
-#   field(INP, "@asyn($(PORT)) FLAT:INTARRAY test/intarraytopic")
-# }
+record(aai, "$(P)$(R)Int32ArrayInput") {
+  field(DESC, "Int32 Array Input Record")
+  field(DTYP, "asynInt32ArrayIn")
+  field(SCAN, "I/O Intr")
+  field(FTVL, "DOUBLE")
+  field(NELM, "10")
+  field(INP, "@asyn($(PORT)) FLAT:INTARRAY test/intarraytopic")
+}
 
-# record(aao, "$(P)$(R)Int32ArrayOutput") {
-#   field(DESC, "Int32 Array Output Record")
-#   field(DTYP, "asynInt32ArrayOut")
-#   field(FTVL, "INT64")
-#   field(NELM, "3")  # Set the number of elements in the array
-#   field(OUT, "@asyn($(PORT)) FLAT:INTARRAY test/intarraytopic")
-# }
+record(aao, "$(P)$(R)Int32ArrayOutput") {
+  field(DESC, "Int32 Array Output Record")
+  field(DTYP, "asynInt32ArrayOut")
+  field(FTVL, "DOUBLE")
+  field(NELM, "10")
+  field(OUT, "@asyn($(PORT)) FLAT:INTARRAY test/intarraytopic")
+}
 
 # record(aai, "$(P)$(R)Float64ArrayInput") {
 #   field(DESC, "Float64 Array Input Record")
