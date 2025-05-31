@@ -136,4 +136,4 @@ Below is a table with the supported interfaces for the FLAT topics, example of I
 | Bit masked integers  | asynUInt32Digital                      | `FLAT:DIGITAL`               | In progress |
 | Strings              | asynOctetRead/asynOctetWrite           | `FLAT:STRING`                | Supported   |
 | Integer Array        | asynInt32ArrayIn/asynInt32ArrayOut     | `FLAT:INTARRAY`              | Supported   |
-| Float Array          | asynFloat64ArrayIn/asynFloat64ArrayOut | `FLAT:FLOATARRAY`            | In progress |
+| Float Array          | asynFloat64ArrayIn/asynFloat64ArrayOut | `FLAT:FLOATARRAY`            | Supported   |
