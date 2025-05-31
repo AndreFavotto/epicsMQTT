@@ -185,9 +185,16 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
           break;
         }
         case asynParamFloat64Array:
-          // TODO: implement interrupt support for float64 arrays
-          throw std::logic_error("asynFloat64Array support not implemented");
+        {
+          std::vector<epicsFloat64> auxArray;
+          asynStatus parseStatus = checkAndParseFloatArray(payload, auxArray);
+          Autoparam::Array<epicsFloat64> dataArray(auxArray.data(), auxArray.size());
+          if (parseStatus == asynSuccess) {
+            pself->doCallbacksArray(deviceVar, dataArray, asynSuccess);
+          }
+          else throw std::invalid_argument("Failed parsing float array");
           break;
+        }
         default:
           break;
       }
@@ -297,7 +304,76 @@ asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<e
   return asynSuccess;
 }
 
+asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector<epicsFloat64>& out) {
+  out.clear();
+  if (s.empty()) return asynError;
 
+  size_t i = 0;
+  size_t end = s.size() - 1;
+  const char comma = ',';
+  const char space = ' ';
+  const char openBracket = '[';
+  const char closeBracket = ']';
+  bool separatorIsKnown = false;
+  char separator;
+
+  if (s[i] == openBracket) {
+    if (s[end] != closeBracket) return asynError;
+    end--;
+    i++;
+  }
+  if (i > end) return asynError; // empty content
+  while (i <= end) {
+    // Skip leading whitespaces
+    while (i <= end && std::isspace(s[i])) i++;
+    if (i > end) return asynError;
+    int sign = 1;
+    if (isSign(s[i])) {
+      if (s[i] == '-') sign = -1;
+      i++;
+      if (i > end) return asynError;
+    }
+
+    std::string strVal = "";
+    bool foundDecimal = false;
+    bool hasDigit = false;
+    while (i <= end && (std::isdigit(s[i]) || (s[i] == '.' && !foundDecimal))) {
+      if (s[i] == '.') {
+        foundDecimal = true;
+      }
+      strVal += s[i];
+      i++;
+      hasDigit = true;
+    }
+    if (!hasDigit) return asynError;
+    if (!isFloat(strVal)) return asynError;
+    out.push_back(sign * stod(strVal));
+
+    if (i > end) break;
+
+    // Determine separator. Accept space, comma or comma plus 1 space
+    if (!separatorIsKnown) {
+      if (std::isspace(s[i])) {
+        separator = space;
+      }
+      else if (s[i] == comma) {
+        separator = comma;
+      }
+      else return asynError;
+      separatorIsKnown = true;
+    }
+    if (s[i] != separator) return asynError;
+    i++;
+    // Skip optional space after comma
+    if (separator == comma && i <= end && s[i] == space) {
+      i++;
+    }
+    // If we ended on a separator
+    if (i > end) return asynError;
+  }
+
+  return asynSuccess;
+}
 //#############################################################################################
 // IO function definitions
 

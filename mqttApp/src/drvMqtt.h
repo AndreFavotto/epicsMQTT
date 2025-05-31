@@ -45,6 +45,7 @@ private:
   static bool isFloat(const std::string& s);
   static bool isSign(char character);
   static asynStatus checkAndParseIntArray(const std::string& s, std::vector<epicsInt32>& out);
+  static asynStatus checkAndParseFloatArray(const std::string& s, std::vector<epicsFloat64>& out);
 };
 
 class MqttTopicAddr : public DeviceAddress {

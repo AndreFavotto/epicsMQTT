@@ -66,17 +66,17 @@ record(aao, "$(P)$(R)Int32ArrayOutput") {
   field(OUT, "@asyn($(PORT)) FLAT:INTARRAY test/intarraytopic")
 }
 
-# record(aai, "$(P)$(R)Float64ArrayInput") {
-#   field(DESC, "Float64 Array Input Record")
-#   field(DTYP, "asynFloat64ArrayIn")
-#   field(SCAN, "I/O Intr")
-#   field(INP, "@asyn($(PORT)) FLAT:FLOATARRAY test/floatarraytopic")
-# }
+record(aai, "$(P)$(R)Float64ArrayInput") {
+  field(DESC, "Float64 Array Input Record")
+  field(DTYP, "asynFloat64ArrayIn")
+  field(SCAN, "I/O Intr")
+  field(INP, "@asyn($(PORT)) FLAT:FLOATARRAY test/floatarraytopic")
+}
 
 record(aao, "$(P)$(R)Float64ArrayOutput") {
   field(DESC, "Float64 Array Output Record")
   field(DTYP, "asynFloat64ArrayOut")
   field(FTVL, "DOUBLE")
-  field(NELM, "3")  # Set the number of elements in the array
+  field(NELM, "10")
   field(OUT, "@asyn($(PORT)) FLAT:FLOATARRAY test/floatarraytopic")
 }
