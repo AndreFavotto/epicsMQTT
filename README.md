@@ -20,10 +20,11 @@ This EPICS module is under development - feel free to contribute opening issues 
 - Auto-update of EPICS PVS via `I/O Intr` records.
 - Support for read/write flat MQTT topics (i.e, topics where the payload is a single value or array).
 - Support for MQTT QoS levels.
+- Checks and reject invalid messages (based mostly on type-checking)
 - Planned - short term:
-  - Several improvements on error handling
-  - Support for parsing fields from one-level JSON TOPIC payloads
+  - Support for parsing fields from one-level JSON topic payloads
   - Support for MQTT retained messages.
+  - Support for MQTT last will messages.
   - Support for MQTT authentication and TLS.
 
 > Note: Virtually all features from the [Paho C++ MQTT client](https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html) are available to be implemented in this driver, so feel free to open an issue if you need a specific feature.
@@ -36,7 +37,7 @@ For now, the supported interfaces are the following:
   - `asynOctet`
   - `asynInt32Array`
   - `asynFloat64Array`
-> Not all of them are fully implemented, so check [Implementation status](#implementation-status) for details.
+> See [Implementation status](#implementation-status) to check the status of development of the interface you need.
 
 ## Building the module
 1. Install the dependencies:
