@@ -233,11 +233,30 @@ bool MqttDriver::isFloat(const std::string& s) {
   std::strtof(s.c_str(), &end);
   return end == s.c_str() + s.size();
 }
+
 /* Checks if a character is a + or - sign */
 bool MqttDriver::isSign(char character) {
   return character == '-' || character == '+';
 }
+/*
+  Checks the validity and parses the int array represented by a string into an epicsInt32 vector.
+  Handles strings with:
 
+  - Optional wrapping brackets ([ ]) - if one bracket is present, both must be;
+
+  - Comma separators with or without spaces (',' or ', ');
+
+  - Single space separators (' ');
+
+  - Trailing spaces (in case of comma separators);
+
+  - Signed digits.
+
+  @param s: string to be parsed
+  @param out: pointer to epicsInt32 vector to be filled with data
+  @return asynStatus
+
+*/
 asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<epicsInt32>& out) {
   out.clear();
   if (s.empty()) return asynError;
@@ -257,10 +276,11 @@ asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<e
     i++;
   }
   if (i > end) return asynError; // empty content
+
   while (i <= end) {
-    // Skip leading whitespaces
     while (i <= end && std::isspace(s[i])) i++;
     if (i > end) return asynError;
+
     int sign = 1;
     if (isSign(s[i])) {
       if (s[i] == '-') sign = -1;
@@ -280,7 +300,6 @@ asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<e
 
     if (i > end) break;
 
-    // Determine separator. Accept space, comma or comma plus 1 space
     if (!separatorIsKnown) {
       if (std::isspace(s[i])) {
         separator = space;
@@ -293,17 +312,34 @@ asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<e
     }
     if (s[i] != separator) return asynError;
     i++;
-    // Skip optional space after comma
-    if (separator == comma && i <= end && s[i] == space) {
-      i++;
+    if (separator == comma) {
+      while (i <= end && std::isspace(s[i])) i++;
     }
-    // If we ended on a separator
     if (i > end) return asynError;
   }
 
   return asynSuccess;
 }
 
+/*
+  Checks the validity and parses the float array represented by a string into an epicsFloat64 vector.
+  Handles strings with:
+
+  - Optional wrapping brackets ([ ]) - if one bracket is present, both must be;
+
+  - Comma separators with or without spaces (',' or ', ');
+
+  - Single space separators (' ');
+
+  - Trailing spaces (in case of comma separators);
+
+  - Signed digits.
+
+  @param s: string to be parsed
+  @param out: pointer to epicsFloat64 vector to be filled with data
+  @return asynStatus
+
+*/
 asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector<epicsFloat64>& out) {
   out.clear();
   if (s.empty()) return asynError;
@@ -322,36 +358,25 @@ asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector
     end--;
     i++;
   }
-  if (i > end) return asynError; // empty content
+  if (i > end) return asynError;
+
+  const char* strStart = s.c_str();
+
   while (i <= end) {
-    // Skip leading whitespaces
     while (i <= end && std::isspace(s[i])) i++;
     if (i > end) return asynError;
-    int sign = 1;
-    if (isSign(s[i])) {
-      if (s[i] == '-') sign = -1;
-      i++;
-      if (i > end) return asynError;
-    }
 
-    std::string strVal = "";
-    bool foundDecimal = false;
-    bool hasDigit = false;
-    while (i <= end && (std::isdigit(s[i]) || (s[i] == '.' && !foundDecimal))) {
-      if (s[i] == '.') {
-        foundDecimal = true;
-      }
-      strVal += s[i];
-      i++;
-      hasDigit = true;
-    }
-    if (!hasDigit) return asynError;
-    if (!isFloat(strVal)) return asynError;
-    out.push_back(sign * stod(strVal));
+    char* endPtr = nullptr;
+    const char* startPtr = strStart + i;
+    // strod parses the first valid float value found and puts position of last digit in endPtr
+    double val = std::strtod(startPtr, &endPtr);
+    if (startPtr == endPtr) return asynError;
+    size_t parsed = static_cast<size_t>(endPtr - startPtr);
+    i += parsed;
+    out.push_back(val);
 
     if (i > end) break;
 
-    // Determine separator. Accept space, comma or comma plus 1 space
     if (!separatorIsKnown) {
       if (std::isspace(s[i])) {
         separator = space;
@@ -359,21 +384,23 @@ asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector
       else if (s[i] == comma) {
         separator = comma;
       }
-      else return asynError;
+      else {
+        return asynError;
+      }
       separatorIsKnown = true;
     }
+
     if (s[i] != separator) return asynError;
     i++;
-    // Skip optional space after comma
-    if (separator == comma && i <= end && s[i] == space) {
-      i++;
+    if (separator == comma) {
+      while (i <= end && std::isspace(s[i])) i++;
     }
-    // If we ended on a separator
     if (i > end) return asynError;
   }
 
   return asynSuccess;
 }
+
 //#############################################################################################
 // IO function definitions
 
