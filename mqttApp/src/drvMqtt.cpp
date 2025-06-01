@@ -35,19 +35,19 @@ bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
 
 DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::string const& arguments) {
   MqttTopicAddr* addr = new MqttTopicAddr;
-  std::istringstream is(arguments);
-  auto pos = function.find(':');
-  std::string prefix = (pos == std::string::npos) ? function : function.substr(0, pos);
-  std::string type = (pos == std::string::npos) ? "" : function.substr(pos + 1);
+  std::istringstream argsStream(arguments);
+  auto colonPos = function.find(':');
+  std::string prefix = (colonPos == std::string::npos) ? function : function.substr(0, colonPos);
+  std::string type = (colonPos == std::string::npos) ? "" : function.substr(colonPos + 1);
   //TODO: add error handling for malformed arguments
   if (prefix == FLAT_FUNC_PREFIX) {
     addr->format = MqttTopicAddr::Flat;
-    is >> addr->topicName;
+    argsStream >> addr->topicName;
   }
   else if (prefix == JSON_FUNC_PREFIX) {
     addr->format = MqttTopicAddr::Json;
-    is >> addr->topicName;
-    is >> addr->jsonField;
+    argsStream >> addr->topicName;
+    argsStream >> addr->jsonField;
   }
   else {
     delete addr;
@@ -145,6 +145,7 @@ void MqttDriver::initHook(Autoparam::Driver* driver) {
 }
 
 void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
+  const char* functionName = __FUNCTION__;
   auto* pself = static_cast<MqttDriver*>(driver);
   pself->lock();
   auto vars = pself->getInterruptVariables();
@@ -154,33 +155,252 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
     if (addr.topicName != topic)
       continue;
     int index = deviceVar.asynIndex();
-    switch (deviceVar.asynType()) {
-      case asynParamInt32:
-        pself->setParam(deviceVar, std::stoi(payload), asynSuccess);
-        break;
-      case asynParamFloat64:
-        pself->setParam(deviceVar, std::stod(payload), asynSuccess);
-        break;
-      case asynParamUInt32Digital:
-        pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
-        break;
-      case asynParamOctet:
-        // use asyn directly - setParam octet overload is not defined
-        pself->setStringParam(index, payload.c_str());
-        break;
-      case asynParamInt32Array:
-        // TODO: implement interrupt support for int32 arrays
-        break;
-      case asynParamFloat64Array:
-        // TODO: implement interrupt support for float64 arrays
-        break;
-      default:
-        break;
+    try {
+      switch (deviceVar.asynType()) {
+        case asynParamInt32:
+          if (!isInteger(payload)) throw std::invalid_argument("Invalid integer");
+          pself->setParam(deviceVar, std::stoi(payload), asynSuccess);
+          break;
+        case asynParamFloat64:
+          if (!isFloat(payload)) throw std::invalid_argument("Invalid float");
+          pself->setParam(deviceVar, std::stod(payload), asynSuccess);
+          break;
+        case asynParamUInt32Digital:
+          // TODO: create checker for UInt
+          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
+          break;
+        case asynParamOctet:
+          // use asyn directly - setParam octet overload is not defined
+          pself->setStringParam(index, payload.c_str());
+          break;
+        case asynParamInt32Array:
+        {
+          std::vector<epicsInt32> auxArray;
+          asynStatus parseStatus = checkAndParseIntArray(payload, auxArray);
+          Autoparam::Array<epicsInt32> dataArray(auxArray.data(), auxArray.size());
+          if (parseStatus == asynSuccess) {
+            pself->doCallbacksArray(deviceVar, dataArray, asynSuccess);
+          }
+          else throw std::invalid_argument("Failed parsing integer array");
+          break;
+        }
+        case asynParamFloat64Array:
+        {
+          std::vector<epicsFloat64> auxArray;
+          asynStatus parseStatus = checkAndParseFloatArray(payload, auxArray);
+          Autoparam::Array<epicsFloat64> dataArray(auxArray.data(), auxArray.size());
+          if (parseStatus == asynSuccess) {
+            pself->doCallbacksArray(deviceVar, dataArray, asynSuccess);
+          }
+          else throw std::invalid_argument("Failed parsing float array");
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    catch (const std::exception& e) {
+      asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
+        "%s::%s:%s: Unexpected value received for topic: '%s': %s)\n",
+        driverName, functionName, e.what(), addr.topicName.c_str(), payload.c_str());
     }
   }
   pself->callParamCallbacks();
   pself->unlock();
 }
+//#############################################################################################
+// Helper methods
+
+/* Checks if a string represents a signed integer */
+bool MqttDriver::isInteger(const std::string& s) {
+  if (s.empty()) return false;
+  size_t i = 0;
+  if (isSign(s[i])) ++i;
+  if (i == s.size()) return false; // message has only sign, no digits
+  for (; i < s.size(); ++i) {
+    if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
+  }
+  return true;
+}
+
+/* Checks if a string represents a float */
+bool MqttDriver::isFloat(const std::string& s) {
+  if (s.empty()) return false;
+  size_t i = 0;
+  if (isSign(s[i])) ++i;
+  if (i == s.size()) return false;
+  char* end = nullptr;
+  std::strtof(s.c_str(), &end);
+  return end == s.c_str() + s.size();
+}
+
+/* Checks if a character is a + or - sign */
+bool MqttDriver::isSign(char character) {
+  return character == '-' || character == '+';
+}
+/*
+  Checks the validity and parses the int array represented by a string into an epicsInt32 vector.
+  Handles strings with:
+
+  - Optional wrapping brackets ([ ]) - if one bracket is present, both must be;
+
+  - Comma separators with or without spaces (',' or ', ');
+
+  - Single space separators (' ');
+
+  - Trailing spaces (in case of comma separators);
+
+  - Signed digits.
+
+  @param s: string to be parsed
+  @param out: pointer to epicsInt32 vector to be filled with data
+  @return asynStatus
+
+*/
+asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<epicsInt32>& out) {
+  out.clear();
+  if (s.empty()) return asynError;
+
+  size_t i = 0;
+  size_t end = s.size() - 1;
+  const char comma = ',';
+  const char space = ' ';
+  const char openBracket = '[';
+  const char closeBracket = ']';
+  bool separatorIsKnown = false;
+  char separator;
+
+  if (s[i] == openBracket) {
+    if (s[end] != closeBracket) return asynError;
+    end--;
+    i++;
+  }
+  if (i > end) return asynError; // empty content
+
+  while (i <= end) {
+    while (i <= end && std::isspace(s[i])) i++;
+    if (i > end) return asynError;
+
+    int sign = 1;
+    if (isSign(s[i])) {
+      if (s[i] == '-') sign = -1;
+      i++;
+      if (i > end) return asynError;
+    }
+
+    int val = 0;
+    bool hasDigit = false;
+    while (i <= end && std::isdigit(s[i])) {
+      val = val * 10 + (s[i] - '0');
+      i++;
+      hasDigit = true;
+    }
+    if (!hasDigit) return asynError;
+    out.push_back(sign * val);
+
+    if (i > end) break;
+
+    if (!separatorIsKnown) {
+      if (std::isspace(s[i])) {
+        separator = space;
+      }
+      else if (s[i] == comma) {
+        separator = comma;
+      }
+      else return asynError;
+      separatorIsKnown = true;
+    }
+    if (s[i] != separator) return asynError;
+    i++;
+    if (separator == comma) {
+      while (i <= end && std::isspace(s[i])) i++;
+    }
+    if (i > end) return asynError;
+  }
+
+  return asynSuccess;
+}
+
+/*
+  Checks the validity and parses the float array represented by a string into an epicsFloat64 vector.
+  Handles strings with:
+
+  - Optional wrapping brackets ([ ]) - if one bracket is present, both must be;
+
+  - Comma separators with or without spaces (',' or ', ');
+
+  - Single space separators (' ');
+
+  - Trailing spaces (in case of comma separators);
+
+  - Signed digits.
+
+  @param s: string to be parsed
+  @param out: pointer to epicsFloat64 vector to be filled with data
+  @return asynStatus
+
+*/
+asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector<epicsFloat64>& out) {
+  out.clear();
+  if (s.empty()) return asynError;
+
+  size_t i = 0;
+  size_t end = s.size() - 1;
+  const char comma = ',';
+  const char space = ' ';
+  const char openBracket = '[';
+  const char closeBracket = ']';
+  bool separatorIsKnown = false;
+  char separator;
+
+  if (s[i] == openBracket) {
+    if (s[end] != closeBracket) return asynError;
+    end--;
+    i++;
+  }
+  if (i > end) return asynError;
+
+  const char* strStart = s.c_str();
+
+  while (i <= end) {
+    while (i <= end && std::isspace(s[i])) i++;
+    if (i > end) return asynError;
+
+    char* endPtr = nullptr;
+    const char* startPtr = strStart + i;
+    // strod parses the first valid float value found and puts position of last digit in endPtr
+    double val = std::strtod(startPtr, &endPtr);
+    if (startPtr == endPtr) return asynError;
+    size_t parsed = static_cast<size_t>(endPtr - startPtr);
+    i += parsed;
+    out.push_back(val);
+
+    if (i > end) break;
+
+    if (!separatorIsKnown) {
+      if (std::isspace(s[i])) {
+        separator = space;
+      }
+      else if (s[i] == comma) {
+        separator = comma;
+      }
+      else {
+        return asynError;
+      }
+      separatorIsKnown = true;
+    }
+
+    if (s[i] != separator) return asynError;
+    i++;
+    if (separator == comma) {
+      while (i <= end && std::isspace(s[i])) i++;
+    }
+    if (i > end) return asynError;
+  }
+
+  return asynSuccess;
+}
+
 //#############################################################################################
 // IO function definitions
 
