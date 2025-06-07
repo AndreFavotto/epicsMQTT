@@ -155,11 +155,10 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
           break;
         case asynParamUInt32Digital:
           if (!isInteger(payload, false)) throw std::invalid_argument("Invalid unsigned integer");
-          //update PV with message as-is. TODO: get mask from asyn parameter and apply
-          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
+          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), asynSuccess);
           break;
         case asynParamOctet:
-          // use asyn directly - setParam octet overload is not defined
+          // use asyn directly - setParam octet overload is not defined in runtime. TODO: investigate
           pself->setStringParam(index, payload.c_str());
           break;
         case asynParamInt32Array:
@@ -432,38 +431,35 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-  const epicsUInt32 allBitsBitmask = 0xFFFFFFFF;
-  epicsUInt32 outVal;
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
-      if (mask != allBitsBitmask) {
-        // since the mask implies only certain bits should be written to the
-        // device the rest must be read before applying the mask
-        epicsUInt32 currentValue;
-        status = driver->getUIntDigitalParam(deviceVar.asynIndex(), &currentValue, allBitsBitmask);
-        if (status == asynSuccess) {
-          // encode bits
-          currentValue |= (value & mask);
-          currentValue &= (value | ~mask);
-          outVal = currentValue;
-          driver->mqttClient.publish(addr.topicName, std::to_string(outVal));
+  epicsUInt32 outVal = value;
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+      if (mask != 0xFFFFFFFF) {
+        // read current value to avoid overwriting other bits when applying mask
+        epicsUInt32 auxVal;
+        status = driver->getUIntDigitalParam(deviceVar.asynIndex(), &auxVal, 0xFFFFFFFF);
+        if (status == asynParamUndefined) {
+          throw std::logic_error("Masked write attempted on uninitialized value (current topic value is unknown)");
         }
+        else if (status != asynSuccess) {
+          throw std::logic_error("Error reading current param value");
+        }
+        auxVal |= (value & mask);
+        auxVal &= (value | ~mask);
+        outVal = auxVal;
       }
+      driver->mqttClient.publish(addr.topicName, std::to_string(outVal));
+      status = asynSuccess;
     }
-    catch (const std::exception& exc) {
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
       status = asynError;
+      throw std::logic_error("JSON support not implemented");
     }
   }
-
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for integer values
-    status = asynError;
-  }
-
-  if (status != asynSuccess) {
+  catch (const std::exception& exc) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to set value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
