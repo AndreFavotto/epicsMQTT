@@ -86,19 +86,6 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
     }())
 {
   mqttClient.connect();
-  // epics -> Asyn DTYP param mapping:
-  // epicsInt32 → asynParamInt32
-  // epicsInt64 → asynParamInt64
-  // epicsFloat64 → asynParamFloat64
-  // epicsUint32 → asynParamUint32Digital
-  // Octet → asynParamOctet
-  // Array<epicsInt8> → asynParamInt8Array
-  // Array<epicsInt16> → asynParamInt16Array
-  // Array<epicsInt32> → asynParamInt32Array
-  // Array<epicsInt64> → asynParamInt64Array
-  // Array<epicsFloat32> → asynParamFloat32Array
-  // Array<epicsFloat64> → asynParamFloat64Array
-
   /*
     since we cannot actively read MQTT topics due to the publish/subscribe
     nature of MQTT - handled as I/O Intr - we won't register any custom read functions,
@@ -132,6 +119,7 @@ MqttDriver::~MqttDriver() {
 }
 
 void MqttDriver::initHook(Autoparam::Driver* driver) {
+  // TODO: this procedure should also be done as a callback to the "on_reconnect" event for the MQTT Client
   auto* pself = static_cast<MqttDriver*>(driver);
   auto vars = pself->getInterruptVariables();
   for (auto itr = vars.begin(); itr != vars.end(); itr++) {
@@ -166,7 +154,8 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
           pself->setParam(deviceVar, std::stod(payload), asynSuccess);
           break;
         case asynParamUInt32Digital:
-          // TODO: create checker for UInt
+          if (!isInteger(payload, false)) throw std::invalid_argument("Invalid unsigned integer");
+          //update PV with message as-is. TODO: get mask from asyn parameter and apply
           pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
           break;
         case asynParamOctet:
@@ -211,12 +200,12 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
 //#############################################################################################
 // Helper methods
 
-/* Checks if a string represents a signed integer */
-bool MqttDriver::isInteger(const std::string& s) {
+/* Checks if a string represents a signed or unsigned integer */
+bool MqttDriver::isInteger(const std::string& s, bool isSigned) {
   if (s.empty()) return false;
   size_t i = 0;
-  if (isSign(s[i])) ++i;
-  if (i == s.size()) return false; // message has only sign, no digits
+  if (isSigned && isSign(s[i])) ++i;
+  if (i == s.size()) return false; // message has only sign and/or no digits
   for (; i < s.size(); ++i) {
     if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
   }
@@ -443,8 +432,33 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  const epicsUInt32 allBitsBitmask = 0xFFFFFFFF;
+  epicsUInt32 outVal;
+  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+    try {
+      if (mask != allBitsBitmask) {
+        // since the mask implies only certain bits should be written to the
+        // device the rest must be read before applying the mask
+        epicsUInt32 currentValue;
+        status = driver->getUIntDigitalParam(deviceVar.asynIndex(), &currentValue, allBitsBitmask);
+        if (status == asynSuccess) {
+          // encode bits
+          currentValue |= (value & mask);
+          currentValue &= (value | ~mask);
+          outVal = currentValue;
+          driver->mqttClient.publish(addr.topicName, std::to_string(outVal));
+        }
+      }
+    }
+    catch (const std::exception& exc) {
+      status = asynError;
+    }
+  }
 
-  // TODO: implement digitalWrite support
+  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+    // TODO: implement JSON support for integer values
+    status = asynError;
+  }
 
   if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,

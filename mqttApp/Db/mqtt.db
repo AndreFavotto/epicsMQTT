@@ -36,18 +36,19 @@ record(stringout, "$(P)$(R)StringOutput") {
   field(DTYP, "asynOctetWrite")
   field(OUT, "@asyn($(PORT)) FLAT:STRING test/stringtopic")
 }
-# record(mbbiDirect, "$(P)$(R)Uint32Input") {
-#   field(DESC, "Uint32 Input Record")
-#   field(DTYP, "asynUInt32Digital")
-#   field(SCAN, "I/O Intr")
-#   field(INP, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
-# }
 
-# record(mbboDirect, "$(P)$(R)Uint32Output") {
-#   field(DESC, "Uint32 Output Record")
-#   field(DTYP, "asynUInt32Digital")
-#   field(OUT, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
-# }
+record(mbbiDirect, "$(P)$(R)Uint32DigitalInput") {
+  field(DESC, "Uint32 (bitmasked) Input Record")
+  field(DTYP, "asynUInt32Digital")
+  field(SCAN, "I/O Intr")
+  field(INP, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
+}
+
+record(mbboDirect, "$(P)$(R)Uint32DigitalOutput") {
+  field(DESC, "Uint32 (bitmasked) Output Record")
+  field(DTYP, "asynUInt32Digital")
+  field(OUT, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
+}
 
 record(aai, "$(P)$(R)Int32ArrayInput") {
   field(DESC, "Int32 Array Input Record")
