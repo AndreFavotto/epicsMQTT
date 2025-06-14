@@ -113,7 +113,7 @@ void MqttClient::on_success(const mqtt::token& tok) {
   }
   else if (tok.get_type() == mqtt::token::Type::SUBSCRIBE) {
     auto topic = (*tok.get_topics())[0];
-    fprintf(stdout, "%s: Subscribed successfully to topic: %s", topic.c_str(), moduleName);
+    fprintf(stdout, "%s: Subscribed to '%s'\n", moduleName, topic.c_str());
   }
   else if (tok.get_type() == mqtt::token::Type::PUBLISH) {
     fprintf(stdout, "%s: Message published\n", moduleName);
@@ -121,11 +121,11 @@ void MqttClient::on_success(const mqtt::token& tok) {
 }
 
 void MqttClient::on_failure(const mqtt::token& tok) {
+  std::string errorMsg = "Error: " + tok.get_error_message() + '\n';
   if (opFailCallback_) {
-    opFailCallback_("Operation failed. Token type: " + std::to_string(int(tok.get_type())) + "ErrorMsg: " + tok.get_error_message());
+    opFailCallback_(errorMsg);
   }
   else {
-    fprintf(stderr, "%s: Operation failed. Token type: %d\n", moduleName, int(tok.get_type()));
-    fprintf(stderr, "%s: Operation failure callback undefined.\n", moduleName);
+    fprintf(stderr, "%s: %s", moduleName, errorMsg.c_str());
   }
 }
