@@ -399,26 +399,21 @@ WriteResult MqttDriver::integerWrite(DeviceVariable& deviceVar, epicsInt32 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
       driver->mqttClient.publish(addr.topicName, std::to_string(value));
       status = asynSuccess;
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for integer values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for integer values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to get value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
@@ -452,11 +447,12 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-      status = asynError;
+      // TODO: implement JSON support for digital values
       throw std::logic_error("JSON support not implemented");
     }
   }
   catch (const std::exception& exc) {
+    status = asynError;
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
       "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
       driverName, functionName, topicName.c_str(), exc.what(), status);
@@ -472,26 +468,21 @@ WriteResult MqttDriver::floatWrite(DeviceVariable& deviceVar, epicsFloat64 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
       driver->mqttClient.publish(addr.topicName, std::to_string(value));
       status = asynSuccess;
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for float values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for float values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to set value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
@@ -505,9 +496,8 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
       const epicsDataType* arrayData = reinterpret_cast<const epicsDataType*>(value.data());
       size_t count = value.size();
 
@@ -519,21 +509,17 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
       driver->mqttClient.publish(topicName, oss.str());
       status = asynSuccess;
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for array values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for array values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to publish array for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
-
   result.status = status;
   return result;
 }
@@ -545,28 +531,23 @@ WriteResult MqttDriver::stringWrite(DeviceVariable& deviceVar, Octet const& valu
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
       char* stringData;
       value.writeTo(stringData, value.maxSize());
       driver->mqttClient.publish(addr.topicName, stringData);
       status = asynSuccess;
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for string values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for string values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to set value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
