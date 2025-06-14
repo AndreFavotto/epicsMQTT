@@ -23,6 +23,8 @@ public:
   ~MqttClient();
 
   using MessageCallback = std::function<void(const std::string& topic, const std::string& payload)>;
+  using ConnectionCallback = std::function<void()>;
+  using OpFailCallback = std::function<void(const std::string& message)>;
 
   void connect();
   void disconnect();
@@ -30,13 +32,18 @@ public:
   void publish(const std::string& topic, const std::string& payload, int qos = -1, bool retained = false);
 
   void setMessageCallback(MessageCallback cb);
+  void setConnectionCallback(ConnectionCallback cb);
+  void setOpFailCallback(OpFailCallback cb);
 
 private:
   int nretry_;
+  const char* moduleName = "pahoMqttClient";
   mqtt::async_client client_;
   mqtt::connect_options connOpts_;
   Config config_;
   MessageCallback messageCallback_;
+  ConnectionCallback connectionCallback_;
+  OpFailCallback opFailCallback_;
 
   // Callbacks
   void connected(const std::string& cause) override;
