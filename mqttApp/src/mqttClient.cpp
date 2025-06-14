@@ -3,7 +3,7 @@
   https://github.com/eclipse-paho/paho.mqtt.cpp/tree/master/examples
 */
 
-#include <iostream>
+#include <cstdio>
 #include <stdexcept>
 #include "mqttClient.h"
 
@@ -67,14 +67,30 @@ void MqttClient::setMessageCallback(MessageCallback cb) {
   messageCallback_ = std::move(cb);
 }
 
+void MqttClient::setConnectionCallback(ConnectionCallback cb) {
+  connectionCallback_ = std::move(cb);
+}
+
+void MqttClient::setOpFailCallback(OpFailCallback cb) {
+  opFailCallback_ = std::move(cb);
+}
+
 // --- mqtt::callback implementations ---
 
 void MqttClient::connected(const std::string& cause) {
-  std::cout << "Connected: " << cause << std::endl;
+  if (connectionCallback_) {
+    connectionCallback_();
+  }
+  else {
+    fprintf(stdout, "%s: Connected: %s\n", moduleName, cause.c_str());
+    fprintf(stdout, "%s: No connection callback configured\n", moduleName);
+  }
 }
 
 void MqttClient::connection_lost(const std::string& cause) {
-  std::cerr << "Connection lost: " << cause << std::endl;
+  fprintf(stderr, "%s: Connection lost: %s\n", moduleName, cause.c_str());
+  fprintf(stderr, "%s: Reconnecting... \n", moduleName);
+  client_.reconnect();
 }
 
 void MqttClient::message_arrived(mqtt::const_message_ptr msg) {
@@ -82,10 +98,10 @@ void MqttClient::message_arrived(mqtt::const_message_ptr msg) {
     messageCallback_(msg->get_topic(), msg->to_string());
   }
   else {
-    std::cout << "\nMessage arrived" << std::endl;
-    std::cout << "\ttopic: '" << msg->get_topic() << "'" << std::endl;
-    std::cout << "\tpayload: '" << msg->to_string() << std::endl;
-    std::cout << "No callback configured";
+    fprintf(stdout, "%s: Message arrived\n", moduleName);
+    fprintf(stdout, "%s: \ttopic: '%s'\n", moduleName, msg->get_topic().c_str());
+    fprintf(stdout, "%s: \tpayload: '%s'\n", moduleName, msg->to_string().c_str());
+    fprintf(stdout, "%s: No message callback configured\n", moduleName);
   }
 }
 
@@ -93,16 +109,23 @@ void MqttClient::message_arrived(mqtt::const_message_ptr msg) {
 
 void MqttClient::on_success(const mqtt::token& tok) {
   if (tok.get_type() == mqtt::token::Type::CONNECT) {
-    std::cout << "Connection successful" << std::endl;
+    fprintf(stdout, "%s: Connection successful\n", moduleName);
   }
   else if (tok.get_type() == mqtt::token::Type::SUBSCRIBE) {
-    std::cout << "Subscribed successfully" << std::endl;
+    auto topic = (*tok.get_topics())[0];
+    fprintf(stdout, "%s: Subscribed successfully to topic: %s", topic.c_str(), moduleName);
   }
   else if (tok.get_type() == mqtt::token::Type::PUBLISH) {
-    std::cout << "Message published" << std::endl;
+    fprintf(stdout, "%s: Message published\n", moduleName);
   }
 }
 
 void MqttClient::on_failure(const mqtt::token& tok) {
-  std::cerr << "Operation failed. Token type: " << int(tok.get_type()) << std::endl;
+  if (opFailCallback_) {
+    opFailCallback_("Operation failed. Token type: " + std::to_string(int(tok.get_type())) + "ErrorMsg: " + tok.get_error_message());
+  }
+  else {
+    fprintf(stderr, "%s: Operation failed. Token type: %d\n", moduleName, int(tok.get_type()));
+    fprintf(stderr, "%s: Operation failure callback undefined.\n", moduleName);
+  }
 }
