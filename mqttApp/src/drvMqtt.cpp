@@ -256,7 +256,7 @@ asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<e
   const char openBracket = '[';
   const char closeBracket = ']';
   bool separatorIsKnown = false;
-  char separator;
+  char separator = '\0'; // initialize to avoid compiler warnings
 
   if (s[i] == openBracket) {
     if (s[end] != closeBracket) return asynError;
@@ -339,7 +339,7 @@ asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector
   const char openBracket = '[';
   const char closeBracket = ']';
   bool separatorIsKnown = false;
-  char separator;
+  char separator = '\0'; // initialize to avoid compiler warnings
 
   if (s[i] == openBracket) {
     if (s[end] != closeBracket) return asynError;
@@ -533,10 +533,11 @@ WriteResult MqttDriver::stringWrite(DeviceVariable& deviceVar, Octet const& valu
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-      char* stringData;
-      value.writeTo(stringData, value.maxSize());
-      driver->mqttClient.publish(addr.topicName, stringData);
-      status = asynSuccess;
+      std::vector<char> stringData(value.maxSize());
+      if (value.writeTo(stringData.data(), stringData.size())) {
+        driver->mqttClient.publish(addr.topicName, stringData.data());
+        status = asynSuccess;
+      }
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
       // TODO: implement JSON support for string values
