@@ -76,7 +76,8 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
     Autoparam::DriverOpts()
     .setBlocking(false)
     .setAutoInterrupts(false)
-    .setInitHook(initHook)),
+    .setInitHook((initHook))
+  ),
   mqttClient([&] {
   MqttClient::Config cfg;
   cfg.brokerUrl = brokerUrl;
@@ -85,7 +86,14 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
   return cfg;
     }())
 {
-  mqttClient.connect();
+  mqttClient.setMessageCallback([this](const std::string& topic, const std::string& payload) {
+    onMessageCb(this, topic, payload);
+    });
+
+  mqttClient.setConnectionCallback([this]() {
+    onConnectCb(this);
+    });
+
   /*
     since we cannot actively read MQTT topics due to the publish/subscribe
     nature of MQTT - handled as I/O Intr - we won't register any custom read functions,
@@ -107,9 +115,6 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
   registerHandlers<Octet>(JSON_STRING_FUNC_STR, NULL, stringWrite, NULL);
   registerHandlers<Array<epicsInt32>>(JSON_INTARRAY_FUNC_STR, NULL, arrayWrite, NULL);
   registerHandlers<Array<epicsFloat64>>(JSON_FLOATARRAY_FUNC_STR, NULL, arrayWrite, NULL);
-
-  // TODO: instead of sleeping, we should wait for connection callback
-  std::this_thread::sleep_for(std::chrono::seconds(2));
 }
 /* Class destructor
    - Disconnects from the broker and cleans session
@@ -119,20 +124,25 @@ MqttDriver::~MqttDriver() {
 }
 
 void MqttDriver::initHook(Autoparam::Driver* driver) {
-  // TODO: this procedure should also be done as a callback to the "on_reconnect" event for the MQTT Client
   auto* pself = static_cast<MqttDriver*>(driver);
+  pself->mqttClient.connect();
+}
+
+void MqttDriver::onConnectCb(Autoparam::Driver* driver) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DEVICE,
+    "%s::%s: Connected to broker\n", driverName, functionName);
+  // subscribe to topics in  I/O Intr records
   auto vars = pself->getInterruptVariables();
   for (auto itr = vars.begin(); itr != vars.end(); itr++) {
     auto& deviceVar = *static_cast<MqttTopicVariable*>(*itr);
     MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
     pself->mqttClient.subscribe(addr.topicName);
   }
-  pself->mqttClient.setMessageCallback([pself](const std::string& topic, const std::string& payload) {
-    pself->handleMqttMessage(pself, topic, payload);
-    });
 }
 
-void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
+void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
   const char* functionName = __FUNCTION__;
   auto* pself = static_cast<MqttDriver*>(driver);
   pself->lock();

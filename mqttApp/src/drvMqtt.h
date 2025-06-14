@@ -33,7 +33,8 @@ protected:
   // strings
   static WriteResult stringWrite(DeviceVariable& deviceVar, Octet const& value);
   // Interrupt callback
-  static void handleMqttMessage(Autoparam::Driver* driver, const std::string& topic, const std::string& payload);
+  static void onMessageCb(Autoparam::Driver* driver, const std::string& topic, const std::string& payload);
+  static void onConnectCb(Autoparam::Driver* driver);
 
 private:
   MqttClient mqttClient;
