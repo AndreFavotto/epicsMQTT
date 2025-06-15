@@ -86,14 +86,29 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
   return cfg;
     }())
 {
-  mqttClient.setMessageCallback([this](const std::string& topic, const std::string& payload) {
+  mqttClient.setMessageCb([this](const std::string& topic, const std::string& payload) {
     onMessageCb(this, topic, payload);
     });
 
-  mqttClient.setConnectionCallback([this]() {
-    onConnectCb(this);
+  mqttClient.setConnectionCb([this](const std::string& reason) {
+    onConnectCb(this, reason);
     });
 
+  mqttClient.setDisconnectionCb([this](const std::string& reason) {
+    onDisconnectCb(this, reason);
+    });
+
+  mqttClient.setSubscriptionCb([this](const std::string& topic) {
+    onSubscribeCb(this, topic);
+    });
+
+  mqttClient.setPublishCb([this](const std::string& topic) {
+    onPublishCb(this, topic);
+    });
+
+  mqttClient.setOpFailCb([this](const std::string& errMsg) {
+    onFailCb(this, errMsg);
+    });
   /*
     since we cannot actively read MQTT topics due to the publish/subscribe
     nature of MQTT - handled as I/O Intr - we won't register any custom read functions,
@@ -127,11 +142,22 @@ void MqttDriver::initHook(Autoparam::Driver* driver) {
   auto* pself = static_cast<MqttDriver*>(driver);
   pself->mqttClient.connect();
 }
+//#############################################################################################
+//Callback definitons
 
-void MqttDriver::onConnectCb(Autoparam::Driver* driver) {
+void MqttDriver::onConnectCb(Autoparam::Driver* driver, const std::string& reason) {
   auto* pself = static_cast<MqttDriver*>(driver);
   const char* functionName = __FUNCTION__;
-  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DEVICE,
+  if (reason == MqttClient::AUTO_RECONNECT_REASON) {
+    /*
+      Since disconnection uses ASYN_TRACE_ERROR mask, use the same
+      to print auto-reconnection events. This ensures user is informed
+      if reconnection after failure is sucessful.
+    */
+    asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER | ASYN_TRACE_ERROR,
+      "%s::%s: Reconnected.\n", driverName, functionName);
+  }
+  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER,
     "%s::%s: Connected to broker\n", driverName, functionName);
   // subscribe to topics in  I/O Intr records
   auto vars = pself->getInterruptVariables();
@@ -142,9 +168,38 @@ void MqttDriver::onConnectCb(Autoparam::Driver* driver) {
   }
 }
 
-void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
-  const char* functionName = __FUNCTION__;
+void MqttDriver::onDisconnectCb(Autoparam::Driver* driver, const std::string& reason) {
   auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
+    "%s::%s: Connection lost. Reconnecting...\n", driverName, functionName);
+  pself->mqttClient.reconnect();
+}
+
+void MqttDriver::onSubscribeCb(Autoparam::Driver* driver, const std::string& topic) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER,
+    "%s::%s: Subscribed to topic '%s'\n", driverName, functionName, topic.c_str());
+}
+
+void MqttDriver::onFailCb(Autoparam::Driver* driver, const std::string& errMsg) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
+    "%s::%s: MQTT Operation error: '%s'\n", driverName, functionName, errMsg.c_str());
+}
+
+void MqttDriver::onPublishCb(Autoparam::Driver* driver, const std::string& topic) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER,
+    "%s::%s: Published to topic '%s'\n", driverName, functionName, topic.c_str());
+}
+
+void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
   pself->lock();
   auto vars = pself->getInterruptVariables();
   for (auto itr = vars.begin(); itr != vars.end(); itr++) {

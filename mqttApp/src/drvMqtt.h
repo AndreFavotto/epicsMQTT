@@ -32,9 +32,13 @@ protected:
   static WriteResult arrayWrite(DeviceVariable& deviceVar, Array<epicsDataType> const& value);
   // strings
   static WriteResult stringWrite(DeviceVariable& deviceVar, Octet const& value);
-  // Interrupt callback
+  // MQTT callbacks
+  static void onConnectCb(Autoparam::Driver* driver, const std::string& reason);
+  static void onDisconnectCb(Autoparam::Driver* driver, const std::string& reason);
   static void onMessageCb(Autoparam::Driver* driver, const std::string& topic, const std::string& payload);
-  static void onConnectCb(Autoparam::Driver* driver);
+  static void onSubscribeCb(Autoparam::Driver* driver, const std::string& topic);
+  static void onPublishCb(Autoparam::Driver* driver, const std::string& topic);
+  static void onFailCb(Autoparam::Driver* driver, const std::string& errMsg);
 
 private:
   MqttClient mqttClient;
