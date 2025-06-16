@@ -2,9 +2,7 @@
 
 This module provides an EPICS driver for the MQTT protocol, allowing EPICS clients to communicate with MQTT brokers and devices directly from EPICS.
 
-**:warning: Not yet ready for production use!**  
-
-This EPICS module is under development - feel free to contribute opening issues and pull requests!
+Contributions are welcome - feel free to open issues and pull requests!
 
 ---
 ## Table of Contents
@@ -17,10 +15,11 @@ This EPICS module is under development - feel free to contribute opening issues 
 
 ---
 ## Features
-- Auto-update of EPICS PVS via `I/O Intr` records.
-- Support for read/write flat MQTT topics (i.e, topics where the payload is a single value or array).
-- Support for MQTT QoS levels.
-- Checks and reject invalid messages (based mostly on type-checking)
+- Auto-update of EPICS PVS via `I/O Intr` records;
+- Support for read/write flat MQTT topics (i.e, topics where the payload is a single value or array);
+- Support for MQTT QoS levels;
+- Checks and reject invalid messages (based mostly on type-checking);
+- Auto reconnection of broker;
 - Planned - short term:
   - Support for parsing fields from one-level JSON topic payloads
   - Support for MQTT retained messages.
@@ -58,7 +57,7 @@ For now, the supported interfaces are the following:
    PAHO_CPP_INC = /path/to/paho/cpp/include #by default, should be /usr/local/include
    PAHO_CPP_LIB = /path/to/paho/cpp/lib     #by default, should be /usr/local/lib
    ```
-   > For now we have two macros for setting paho path because we build the module with separate linking flags -I and -L, but this will change soon.
+   > For now we have two macros for setting paho path because we build the module with separate linking flags -I and -L, but this might change soon.
 
 4. Run `make`. 
    The library should now be ready for [usage](#usage).
@@ -134,7 +133,7 @@ Below is a table with the supported interfaces for the FLAT topics, example of I
 |----------------------|--------------------------------------- |------------------------------|-------------|
 | Integer              | asynInt32                              | `FLAT:INT`                   | Supported   |
 | Float                | asynFloat64                            | `FLAT:FLOAT`                 | Supported   |
-| Bit masked integers  | asynUInt32Digital                      | `FLAT:DIGITAL`               | In progress |
+| Bit masked integers  | asynUInt32Digital                      | `FLAT:DIGITAL`               | Supported   |
 | Strings              | asynOctetRead/asynOctetWrite           | `FLAT:STRING`                | Supported   |
 | Integer Array        | asynInt32ArrayIn/asynInt32ArrayOut     | `FLAT:INTARRAY`              | Supported   |
 | Float Array          | asynFloat64ArrayIn/asynFloat64ArrayOut | `FLAT:FLOATARRAY`            | Supported   |

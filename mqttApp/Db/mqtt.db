@@ -1,56 +1,57 @@
 record(ai, "$(P)$(R)Int32Input") {
-  field(DESC, "Analog Input Record")
+  field(DESC, "Analog Input")
   field(DTYP, "asynInt32")
   field(SCAN, "I/O Intr")
   field(INP, "@asyn($(PORT)) FLAT:INT test/inttopic")
 }
 
 record(ao, "$(P)$(R)Int32Output") {
-  field(DESC, "Analog Out Record")
+  field(DESC, "Analog Out")
   field(DTYP, "asynInt32")
   field(OUT, "@asyn($(PORT)) FLAT:INT test/inttopic")
 }
 
 record(ai, "$(P)$(R)Float64Input" ) {
-  field(DESC, "Float64 Input Record")
+  field(DESC, "Float64 Input")
   field(DTYP, "asynFloat64")
   field(SCAN, "I/O Intr")
   field(INP, "@asyn($(PORT)) FLAT:FLOAT test/floattopic")
 }
 
 record(ao, "$(P)$(R)Float64Output") {
-  field(DESC, "Float64 Output Record")
+  field(DESC, "Float64 Output")
   field(DTYP, "asynFloat64")
   field(OUT, "@asyn($(PORT)) FLAT:FLOAT test/floattopic")
 }
 
 record(stringin, "$(P)$(R)StringInput") {
-  field(DESC, "Octet Input Record")
+  field(DESC, "Octet Input")
   field(DTYP, "asynOctetRead")
   field(SCAN, "I/O Intr")
   field(INP, "@asyn($(PORT)) FLAT:STRING test/stringtopic")
 }
 
 record(stringout, "$(P)$(R)StringOutput") {
-  field(DESC, "Octet Output Record")
+  field(DESC, "Octet Output")
   field(DTYP, "asynOctetWrite")
   field(OUT, "@asyn($(PORT)) FLAT:STRING test/stringtopic")
 }
-# record(mbbiDirect, "$(P)$(R)Uint32Input") {
-#   field(DESC, "Uint32 Input Record")
-#   field(DTYP, "asynUInt32Digital")
-#   field(SCAN, "I/O Intr")
-#   field(INP, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
-# }
 
-# record(mbboDirect, "$(P)$(R)Uint32Output") {
-#   field(DESC, "Uint32 Output Record")
-#   field(DTYP, "asynUInt32Digital")
-#   field(OUT, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
-# }
+record(mbbiDirect, "$(P)$(R)Uint32DigitalInput") {
+  field(DESC, "Bitmasked UInt32 Input")
+  field(DTYP, "asynUInt32Digital")
+  field(SCAN, "I/O Intr")
+  field(INP, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
+}
+
+record(mbboDirect, "$(P)$(R)Uint32DigitalOutput") {
+  field(DESC, "Bitmasked UInt32 Output")
+  field(DTYP, "asynUInt32Digital")
+  field(OUT, "@asynMask($(PORT), 0, 0xF) FLAT:DIGITAL test/digitaltopic")
+}
 
 record(aai, "$(P)$(R)Int32ArrayInput") {
-  field(DESC, "Int32 Array Input Record")
+  field(DESC, "Int32 Array Input")
   field(DTYP, "asynInt32ArrayIn")
   field(SCAN, "I/O Intr")
   field(FTVL, "DOUBLE")
@@ -59,7 +60,7 @@ record(aai, "$(P)$(R)Int32ArrayInput") {
 }
 
 record(aao, "$(P)$(R)Int32ArrayOutput") {
-  field(DESC, "Int32 Array Output Record")
+  field(DESC, "Int32 Array Output")
   field(DTYP, "asynInt32ArrayOut")
   field(FTVL, "DOUBLE")
   field(NELM, "10")
@@ -67,14 +68,14 @@ record(aao, "$(P)$(R)Int32ArrayOutput") {
 }
 
 record(aai, "$(P)$(R)Float64ArrayInput") {
-  field(DESC, "Float64 Array Input Record")
+  field(DESC, "Float64 Array Input")
   field(DTYP, "asynFloat64ArrayIn")
   field(SCAN, "I/O Intr")
   field(INP, "@asyn($(PORT)) FLAT:FLOATARRAY test/floatarraytopic")
 }
 
 record(aao, "$(P)$(R)Float64ArrayOutput") {
-  field(DESC, "Float64 Array Output Record")
+  field(DESC, "Float64 Array Output")
   field(DTYP, "asynFloat64ArrayOut")
   field(FTVL, "DOUBLE")
   field(NELM, "10")

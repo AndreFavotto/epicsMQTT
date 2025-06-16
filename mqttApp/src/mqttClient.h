@@ -22,21 +22,40 @@ public:
   MqttClient(const Config& cfg);
   ~MqttClient();
 
+  using ConnectionCallback = std::function<void(const std::string& reason)>;
+  using DisconnectionCallback = std::function<void(const std::string& reason)>;
   using MessageCallback = std::function<void(const std::string& topic, const std::string& payload)>;
+  using SubscriptionCallback = std::function<void(const std::string& topic)>;
+  using PublishCallback = std::function<void(const std::string& topic)>;
+  using OpFailCallback = std::function<void(const std::string& message)>;
 
   void connect();
   void disconnect();
+  void reconnect();
   void subscribe(const std::string& topic);
   void publish(const std::string& topic, const std::string& payload, int qos = -1, bool retained = false);
 
-  void setMessageCallback(MessageCallback cb);
+  void setConnectionCb(ConnectionCallback cb);
+  void setDisconnectionCb(DisconnectionCallback cb);
+  void setMessageCb(MessageCallback cb);
+  void setSubscriptionCb(SubscriptionCallback cb);
+  void setPublishCb(PublishCallback cb);
+  void setOpFailCb(OpFailCallback cb);
+
+  static const char* AUTO_RECONNECT_REASON;
 
 private:
   int nretry_;
+  const char* moduleName = "pahoMqttClient";
   mqtt::async_client client_;
   mqtt::connect_options connOpts_;
   Config config_;
-  MessageCallback messageCallback_;
+  MessageCallback messageCb_;
+  ConnectionCallback connectionCb_;
+  DisconnectionCallback disconnectionCb_;
+  OpFailCallback opFailCb_;
+  SubscriptionCallback subscriptionCb_;
+  PublishCallback publishCb_;
 
   // Callbacks
   void connected(const std::string& cause) override;

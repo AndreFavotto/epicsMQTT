@@ -76,7 +76,8 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
     Autoparam::DriverOpts()
     .setBlocking(false)
     .setAutoInterrupts(false)
-    .setInitHook(initHook)),
+    .setInitHook((initHook))
+  ),
   mqttClient([&] {
   MqttClient::Config cfg;
   cfg.brokerUrl = brokerUrl;
@@ -85,20 +86,29 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
   return cfg;
     }())
 {
-  mqttClient.connect();
-  // epics -> Asyn DTYP param mapping:
-  // epicsInt32 → asynParamInt32
-  // epicsInt64 → asynParamInt64
-  // epicsFloat64 → asynParamFloat64
-  // epicsUint32 → asynParamUint32Digital
-  // Octet → asynParamOctet
-  // Array<epicsInt8> → asynParamInt8Array
-  // Array<epicsInt16> → asynParamInt16Array
-  // Array<epicsInt32> → asynParamInt32Array
-  // Array<epicsInt64> → asynParamInt64Array
-  // Array<epicsFloat32> → asynParamFloat32Array
-  // Array<epicsFloat64> → asynParamFloat64Array
+  mqttClient.setMessageCb([this](const std::string& topic, const std::string& payload) {
+    onMessageCb(this, topic, payload);
+    });
 
+  mqttClient.setConnectionCb([this](const std::string& reason) {
+    onConnectCb(this, reason);
+    });
+
+  mqttClient.setDisconnectionCb([this](const std::string& reason) {
+    onDisconnectCb(this, reason);
+    });
+
+  mqttClient.setSubscriptionCb([this](const std::string& topic) {
+    onSubscribeCb(this, topic);
+    });
+
+  mqttClient.setPublishCb([this](const std::string& topic) {
+    onPublishCb(this, topic);
+    });
+
+  mqttClient.setOpFailCb([this](const std::string& errMsg) {
+    onFailCb(this, errMsg);
+    });
   /*
     since we cannot actively read MQTT topics due to the publish/subscribe
     nature of MQTT - handled as I/O Intr - we won't register any custom read functions,
@@ -120,9 +130,6 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
   registerHandlers<Octet>(JSON_STRING_FUNC_STR, NULL, stringWrite, NULL);
   registerHandlers<Array<epicsInt32>>(JSON_INTARRAY_FUNC_STR, NULL, arrayWrite, NULL);
   registerHandlers<Array<epicsFloat64>>(JSON_FLOATARRAY_FUNC_STR, NULL, arrayWrite, NULL);
-
-  // TODO: instead of sleeping, we should wait for connection callback
-  std::this_thread::sleep_for(std::chrono::seconds(2));
 }
 /* Class destructor
    - Disconnects from the broker and cleans session
@@ -133,20 +140,66 @@ MqttDriver::~MqttDriver() {
 
 void MqttDriver::initHook(Autoparam::Driver* driver) {
   auto* pself = static_cast<MqttDriver*>(driver);
+  pself->mqttClient.connect();
+}
+//#############################################################################################
+//Callback definitons
+
+void MqttDriver::onConnectCb(Autoparam::Driver* driver, const std::string& reason) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  if (reason == MqttClient::AUTO_RECONNECT_REASON) {
+    /*
+      Since disconnection uses ASYN_TRACE_ERROR mask, use the same
+      to print auto-reconnection events. This ensures user is informed
+      if reconnection after failure is sucessful.
+    */
+    asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER | ASYN_TRACE_ERROR,
+      "%s::%s: Reconnected.\n", driverName, functionName);
+  }
+  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER,
+    "%s::%s: Connected to broker\n", driverName, functionName);
+  // subscribe to topics in  I/O Intr records
   auto vars = pself->getInterruptVariables();
   for (auto itr = vars.begin(); itr != vars.end(); itr++) {
     auto& deviceVar = *static_cast<MqttTopicVariable*>(*itr);
     MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
     pself->mqttClient.subscribe(addr.topicName);
   }
-  pself->mqttClient.setMessageCallback([pself](const std::string& topic, const std::string& payload) {
-    pself->handleMqttMessage(pself, topic, payload);
-    });
 }
 
-void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
-  const char* functionName = __FUNCTION__;
+void MqttDriver::onDisconnectCb(Autoparam::Driver* driver, const std::string& reason) {
   auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
+    "%s::%s: Connection lost. Reconnecting...\n", driverName, functionName);
+  pself->mqttClient.reconnect();
+}
+
+void MqttDriver::onSubscribeCb(Autoparam::Driver* driver, const std::string& topic) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER,
+    "%s::%s: Subscribed to topic '%s'\n", driverName, functionName, topic.c_str());
+}
+
+void MqttDriver::onFailCb(Autoparam::Driver* driver, const std::string& errMsg) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
+    "%s::%s: MQTT Operation error: '%s'\n", driverName, functionName, errMsg.c_str());
+}
+
+void MqttDriver::onPublishCb(Autoparam::Driver* driver, const std::string& topic) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
+  asynPrint(pself->pasynUserSelf, ASYN_TRACEIO_DRIVER,
+    "%s::%s: Published to topic '%s'\n", driverName, functionName, topic.c_str());
+}
+
+void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
+  auto* pself = static_cast<MqttDriver*>(driver);
+  const char* functionName = __FUNCTION__;
   pself->lock();
   auto vars = pself->getInterruptVariables();
   for (auto itr = vars.begin(); itr != vars.end(); itr++) {
@@ -166,11 +219,11 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
           pself->setParam(deviceVar, std::stod(payload), asynSuccess);
           break;
         case asynParamUInt32Digital:
-          // TODO: create checker for UInt
-          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), 0xFFFFFFFF, asynSuccess);
+          if (!isInteger(payload, false)) throw std::invalid_argument("Invalid unsigned integer");
+          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), asynSuccess);
           break;
         case asynParamOctet:
-          // use asyn directly - setParam octet overload is not defined
+          // use asyn directly - setParam octet overload is not defined in runtime. TODO: investigate
           pself->setStringParam(index, payload.c_str());
           break;
         case asynParamInt32Array:
@@ -211,12 +264,12 @@ void MqttDriver::handleMqttMessage(Autoparam::Driver* driver, const std::string&
 //#############################################################################################
 // Helper methods
 
-/* Checks if a string represents a signed integer */
-bool MqttDriver::isInteger(const std::string& s) {
+/* Checks if a string represents a signed or unsigned integer */
+bool MqttDriver::isInteger(const std::string& s, bool isSigned) {
   if (s.empty()) return false;
   size_t i = 0;
-  if (isSign(s[i])) ++i;
-  if (i == s.size()) return false; // message has only sign, no digits
+  if (isSigned && isSign(s[i])) ++i;
+  if (i == s.size()) return false; // message has only sign and/or no digits
   for (; i < s.size(); ++i) {
     if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
   }
@@ -268,7 +321,7 @@ asynStatus MqttDriver::checkAndParseIntArray(const std::string& s, std::vector<e
   const char openBracket = '[';
   const char closeBracket = ']';
   bool separatorIsKnown = false;
-  char separator;
+  char separator = '\0'; // initialize to avoid compiler warnings
 
   if (s[i] == openBracket) {
     if (s[end] != closeBracket) return asynError;
@@ -351,7 +404,7 @@ asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector
   const char openBracket = '[';
   const char closeBracket = ']';
   bool separatorIsKnown = false;
-  char separator;
+  char separator = '\0'; // initialize to avoid compiler warnings
 
   if (s[i] == openBracket) {
     if (s[end] != closeBracket) return asynError;
@@ -411,26 +464,21 @@ WriteResult MqttDriver::integerWrite(DeviceVariable& deviceVar, epicsInt32 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
       driver->mqttClient.publish(addr.topicName, std::to_string(value));
       status = asynSuccess;
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for integer values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for integer values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to get value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
@@ -443,13 +491,36 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  // TODO: implement digitalWrite support
-
-  if (status != asynSuccess) {
+  epicsUInt32 outVal = value;
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+      if (mask != 0xFFFFFFFF) {
+        // read current value to avoid overwriting other bits when applying mask
+        epicsUInt32 auxVal;
+        status = driver->getUIntDigitalParam(deviceVar.asynIndex(), &auxVal, 0xFFFFFFFF);
+        if (status == asynParamUndefined) {
+          throw std::logic_error("Masked write attempted on uninitialized value (current topic value is unknown)");
+        }
+        else if (status != asynSuccess) {
+          throw std::logic_error("Error reading current param value");
+        }
+        auxVal |= (value & mask);
+        auxVal &= (value | ~mask);
+        outVal = auxVal;
+      }
+      driver->mqttClient.publish(addr.topicName, std::to_string(outVal));
+      status = asynSuccess;
+    }
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for digital values
+      throw std::logic_error("JSON support not implemented");
+    }
+  }
+  catch (const std::exception& exc) {
+    status = asynError;
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to set value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
@@ -462,26 +533,21 @@ WriteResult MqttDriver::floatWrite(DeviceVariable& deviceVar, epicsFloat64 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
       driver->mqttClient.publish(addr.topicName, std::to_string(value));
       status = asynSuccess;
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for float values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for float values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to set value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
@@ -495,9 +561,8 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
       const epicsDataType* arrayData = reinterpret_cast<const epicsDataType*>(value.data());
       size_t count = value.size();
 
@@ -509,21 +574,17 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
       driver->mqttClient.publish(topicName, oss.str());
       status = asynSuccess;
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for array values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for array values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to publish array for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
-
   result.status = status;
   return result;
 }
@@ -535,28 +596,24 @@ WriteResult MqttDriver::stringWrite(DeviceVariable& deviceVar, Octet const& valu
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
-
-  if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
-    try {
-      char* stringData;
-      value.writeTo(stringData, value.maxSize());
-      driver->mqttClient.publish(addr.topicName, stringData);
-      status = asynSuccess;
+  try {
+    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+      std::vector<char> stringData(value.maxSize());
+      if (value.writeTo(stringData.data(), stringData.size())) {
+        driver->mqttClient.publish(addr.topicName, stringData.data());
+        status = asynSuccess;
+      }
     }
-    catch (const std::exception& exc) {
-      status = asynError;
+    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+      // TODO: implement JSON support for string values
+      throw std::logic_error("JSON support not implemented");
     }
   }
-
-  else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
-    // TODO: implement JSON support for string values
+  catch (const std::exception& exc) {
     status = asynError;
-  }
-
-  if (status != asynSuccess) {
     asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
-      "%s::%s: Failed to set value for param index %d (topic: '%s')\n",
-      driverName, functionName, deviceVar.asynIndex(), topicName.c_str());
+      "%s::%s: Failed to set value for topic '%s': %s. asynStatus: %d)\n",
+      driverName, functionName, topicName.c_str(), exc.what(), status);
   }
   result.status = status;
   return result;
