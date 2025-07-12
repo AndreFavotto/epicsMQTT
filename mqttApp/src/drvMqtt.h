@@ -9,6 +9,7 @@
 #include <asynPortDriver.h>
 #include <sstream>
 #include "mqttClient.h"
+#include <unordered_set>
 
 using namespace Autoparam::Convenience;
 
@@ -20,6 +21,13 @@ public:
   MqttDriver(const char* portName, const char* mqttBrokerAddr, const char* mqttClientID, const int qos);
   /* Destructor */
   ~MqttDriver();
+  /*! \brief Supported types for MQTT topics.
+   *
+   * This set contains the types that the driver supports for MQTT topics.
+   * It is used to determine which strings can be used to define topic
+   * types (e.g. "FLAT:INT", "JSON:FLOAT", etc.)
+   */
+  static const std::unordered_set<std::string> supportedTopicTypes;
 
 protected:
   static void initHook(Autoparam::Driver* driver);
@@ -49,6 +57,8 @@ private:
   static bool isInteger(const std::string& s, bool isSigned = true);
   static bool isFloat(const std::string& s);
   static bool isSign(char character);
+  static bool isSupportedTopicType(const std::string& type);
+  static bool isValidTopicName(const std::string& topicName);
   static asynStatus checkAndParseIntArray(const std::string& s, std::vector<epicsInt32>& out);
   static asynStatus checkAndParseFloatArray(const std::string& s, std::vector<epicsFloat64>& out);
 };
