@@ -21,6 +21,9 @@ mqtt_SRCS += mqtt_registerRecordDeviceDriver.cpp
 mqtt_SRCS += drvMqtt.cpp
 mqtt_SRCS += mqttClient.cpp
 
+# nlohmann json.hpp
+USR_INCLUDES += -Ijson/json.hpp
+
 mqtt_SRCS_DEFAULT += mqttMain.cpp
 mqtt_SRCS_vxWorks += -nil-
 
