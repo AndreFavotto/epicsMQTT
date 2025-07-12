@@ -12,9 +12,11 @@
 #include <asynPortDriver.h>
 #include <sstream>
 #include "mqttClient.h"
+#include "json/json.hpp"
 #include <unordered_set>
 
 using namespace Autoparam::Convenience;
+using json = nlohmann::json;
 
 static const char* driverName = "MqttDriver";
 
@@ -57,6 +59,7 @@ private:
   DeviceAddress* parseDeviceAddress(std::string const& function, std::string const& arguments);
   DeviceVariable* createDeviceVariable(DeviceVariable* baseVar);
   /* helper methods */
+  static const json* findJsonField(const json& payload, const std::string& targetKey);
   static bool isInteger(const std::string& s, bool isSigned = true);
   static bool isFloat(const std::string& s);
   static bool isSign(char character);
@@ -68,7 +71,7 @@ private:
 
 class MqttTopicAddr : public DeviceAddress {
 public:
-  enum TopicFormat { Flat, Json };
+  enum TopicFormat { FLAT, JSON };
 
   TopicFormat format;
   std::string topicName;
