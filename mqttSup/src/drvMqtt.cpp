@@ -20,6 +20,21 @@
 #define JSON_STRING_FUNC_STR      JSON_FUNC_PREFIX ":STRING"
 #define JSON_INTARRAY_FUNC_STR    JSON_FUNC_PREFIX ":INTARRAY"
 #define JSON_FLOATARRAY_FUNC_STR  JSON_FUNC_PREFIX ":FLOATARRAY"
+
+const std::unordered_set<std::string> MqttDriver::supportedTopicTypes = {
+  FLAT_INT_FUNC_STR,
+  FLAT_FLOAT_FUNC_STR,
+  FLAT_DIGITAL_FUNC_STR,
+  FLAT_STRING_FUNC_STR,
+  FLAT_INTARRAY_FUNC_STR,
+  FLAT_FLOATARRAY_FUNC_STR,
+  JSON_INT_FUNC_STR,
+  JSON_FLOAT_FUNC_STR,
+  JSON_DIGITAL_FUNC_STR,
+  JSON_STRING_FUNC_STR,
+  JSON_INTARRAY_FUNC_STR,
+  JSON_FLOATARRAY_FUNC_STR
+};
 //#############################################################################################
 // autoParam-specific definitions
 
@@ -37,20 +52,42 @@ bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
 }
 
 DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::string const& arguments) {
+  const char* functionName = __FUNCTION__;
   MqttTopicAddr* addr = new MqttTopicAddr;
-  std::istringstream argsStream(arguments);
+  if (!isSupportedTopicType(function)) {
+    fprintf(stderr, "%s::%s: Invalid topic type: %s\n", driverName, functionName, function.c_str());
+    delete addr;
+    return nullptr;
+  }
   auto colonPos = function.find(':');
-  std::string prefix = (colonPos == std::string::npos) ? function : function.substr(0, colonPos);
-  std::string type = (colonPos == std::string::npos) ? "" : function.substr(colonPos + 1);
-  //TODO: add error handling for malformed arguments
+  std::string prefix = function.substr(0, colonPos);
   if (prefix == FLAT_FUNC_PREFIX) {
+    std::string topicName = arguments;
+    if (!isValidTopicName(topicName)) {
+      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
+      delete addr;
+      return nullptr;
+    }
     addr->format = MqttTopicAddr::Flat;
-    argsStream >> addr->topicName;
+    addr->topicName = topicName;
   }
   else if (prefix == JSON_FUNC_PREFIX) {
+    auto spacePos = arguments.find(' ');
+    if (spacePos == std::string::npos) {
+      fprintf(stderr, "%s::%s: JSON field not specified: %s\n", driverName, functionName, arguments.c_str());
+      delete addr;
+      return nullptr;
+    }
+    std::string topicName = arguments.substr(0, spacePos);
+    if (!isValidTopicName(topicName)) {
+      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
+      delete addr;
+      return nullptr;
+    }
+    std::string jsonField = arguments.substr(spacePos, arguments.size());
     addr->format = MqttTopicAddr::Json;
-    argsStream >> addr->topicName;
-    argsStream >> addr->jsonField;
+    addr->topicName = topicName;
+    addr->jsonField = jsonField;
   }
   else {
     delete addr;
@@ -266,6 +303,20 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
 }
 //#############################################################################################
 // Helper methods
+
+/* Checks if a string corresponds to one of the supported topic types */
+bool MqttDriver::isSupportedTopicType(const std::string& type) {
+  return MqttDriver::supportedTopicTypes.find(type) != MqttDriver::supportedTopicTypes.end();
+}
+
+bool MqttDriver::isValidTopicName(const std::string& topicName) {
+  if (topicName.empty()) return false;
+  // Do not accept wildcard characters - one topic per record only
+  if (topicName.find('#') != std::string::npos || topicName.find('+') != std::string::npos) {
+    return false;
+  }
+  return true;
+}
 
 /* Checks if a string represents a signed or unsigned integer */
 bool MqttDriver::isInteger(const std::string& s, bool isSigned) {
