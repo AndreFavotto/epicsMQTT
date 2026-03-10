@@ -75,13 +75,18 @@ DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::
       delete addr;
       return nullptr;
     }
+    if (spacePos+1 >= arguments.size()) {
+      fprintf(stderr, "%s::%s: JSON field is empty: %s\n", driverName, functionName, arguments.c_str());
+      delete addr;
+      return nullptr;
+    }
     std::string topicName = arguments.substr(0, spacePos);
     if (!isValidTopicName(topicName)) {
       fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
       delete addr;
       return nullptr;
     }
-    std::string jsonField = arguments.substr(spacePos, arguments.size());
+    std::string jsonField = arguments.substr(spacePos+1, arguments.size());
     addr->format = MqttTopicAddr::JSON;
     addr->topicName = topicName;
     addr->jsonField = jsonField;
