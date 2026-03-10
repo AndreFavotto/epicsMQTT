@@ -27,10 +27,10 @@ def pva_context():
         stderr=subprocess.STDOUT,
         text=True,
     )
-    time.sleep(2.0)  # IOC startup + connection
+    time.sleep(5.0)  # IOC startup + connection to public broker
     context = Context("pva")
     try:
-        context.get(f"{PV_PREFIX}Int32Input", timeout=2.0)
+        context.get(f"{PV_PREFIX}Int32Input", timeout=1.0)
         yield context
     except Exception as error:
         raise RuntimeError(f"Failed to start IOC process or connect to PVs: {error}")

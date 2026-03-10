@@ -49,10 +49,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+
       - name: "Install system dependencies"
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake libssl-dev
+
       - name: Install Paho MQTT Cpp library
         run: |
           .ci-local/install-paho.sh
