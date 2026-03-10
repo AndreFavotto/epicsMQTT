@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 1997 Argonne National Laboratory
+#
+# SPDX-License-Identifier: EPICS
+
+# Variables and paths to dependent modules:
+MODULES = /opt/epics/support
+ASYN = $(MODULES)/asyn-R4-45
+# NOTE: This example is part of the source app.
+# For your build, you probably want to set "MQTT = $(MODULES)/epicsMQTT" instead:
+MQTT = $(TOP)/..
+
+EPICS_BASE = /opt/epics/base-7.0.8.1
+
+-include $(TOP)/../RELEASE.local
+-include $(TOP)/../RELEASE.$(EPICS_HOST_ARCH).local
+-include $(TOP)/configure/RELEASE.local
