@@ -1,0 +1,5 @@
+MODULES=asyn autoparam
+
+AUTOPARAM=v2.0.0
+AUTOPARAM_REPOOWNER="Cosylab"
+AUTOPARAM_REPONAME="autoparamDriver"
