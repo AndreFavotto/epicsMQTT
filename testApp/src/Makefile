@@ -5,49 +5,27 @@
 TOP=../..
 
 include $(TOP)/configure/CONFIG
-#----------------------------------------
-#  ADD MACRO DEFINITIONS AFTER THIS LINE
-#=============================
-
-#=============================
-# Build the IOC application
 
 PROD_IOC = test
-# test.dbd will be created and installed
+
 DBD += test.dbd
 
-# test.dbd will be made up from these files:
 test_DBD += base.dbd
 test_DBD += mqtt.dbd
 test_DBD += PVAServerRegister.dbd
 test_DBD += qsrv.dbd
 
-# Include dbd files from all support applications:
-#test_DBD += xxx.dbd
-
-# Add all the support libraries needed by this IOC
 test_LIBS += asyn
-test_LIBS += mqtt
+test_LIBS += mqttSupport
 test_LIBS += qsrv
 test_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
 
-# test_registerRecordDeviceDriver.cpp derives from test.dbd
 test_SRCS += test_registerRecordDeviceDriver.cpp
 
-# Build the main IOC entry point on workstation OSs.
 test_SRCS_DEFAULT += testMain.cpp
 test_SRCS_vxWorks += -nil-
 
-# Add support from base/src/vxWorks if needed
-#test_OBJS_vxWorks += $(EPICS_BASE_BIN)/vxComLibrary
-
-# Finally link to the EPICS Base libraries
 test_LIBS += $(EPICS_BASE_IOC_LIBS)
-#### Other commands ...
-
-#===========================
 
 include $(TOP)/configure/RULES
-#----------------------------------------
-#  ADD RULES AFTER THIS LINE
 

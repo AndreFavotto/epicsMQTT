@@ -96,7 +96,7 @@ device support. For now, the supported interfaces are the following:
      yourIOC_DBD += mqtt.dbd
      #### Other commands ...
      yourIOC_LIBS += asyn
-     yourIOC_LIBS += mqtt
+     yourIOC_LIBS += mqttSupport
      ```
 
 2. In your database file, link the EPICS records and the MQTT topics through the `INP` and `OUT` fields. The syntax is
