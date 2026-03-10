@@ -25,6 +25,6 @@ epicsEnvSet("R", "mqtt:")
 mqttDriverConfigure($(PORT), $(BROKER_URL), $(CLIENT_ID), $(QOS))
 
 ## Load record instances
-dbLoadRecords("${TOP}/exampleApp/Db/example.db", "P=$(P), R=$(R), PORT=$(PORT)")
+dbLoadRecords("db/example.db", "P=$(P), R=$(R), PORT=$(PORT)")
 cd "${TOP}/iocBoot/${IOC}"
 iocInit
