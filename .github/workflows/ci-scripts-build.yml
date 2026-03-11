@@ -53,7 +53,7 @@ jobs:
       - name: "Install system dependencies"
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake libssl-dev
+          sudo apt-get install -y cmake libssl-dev mosquitto
 
       - name: Install Paho MQTT Cpp library
         run: |

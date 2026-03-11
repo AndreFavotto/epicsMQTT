@@ -1,11 +1,11 @@
 # MQTT Round-Trip Tests
 
-This folder contains an integration test for the EPICS MQTT driver using `pytest` + `p4p`.
+This folder contains an integration test for the EPICS MQTT driver using `pytest` + `mosquitto` + `p4p`.
 
 ## What this test does
 
-- Starts the test IOC by running `./st.cmd` in `iocBoot/ioctest`.
-- Connects the IOC to `mqtt://test.mosquitto.org:1883` (public test broker).
+- Starts a local Mosquitto broker in port **18830**.
+- Starts the test IOC by running `./st.cmd` in `iocBoot/ioctest`, pointed at the local broker.
   - Uses a unique MQTT client ID and topic root per test session to avoid crosstalk.
 - Writes values to output PVs and waits for the corresponding input PVs to receive the same value back.
   - This ensures the basic functionality of the driver, including MQTT connectivity, topic subscription, and record

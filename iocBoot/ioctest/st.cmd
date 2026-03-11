@@ -13,7 +13,7 @@ dbLoadDatabase "dbd/test.dbd"
 test_registerRecordDeviceDriver pdbbase
 
 epicsEnvSet("PORT", "mqttTest")
-epicsEnvSet("BROKER_URL", "mqtt://test.mosquitto.org:1883")
+epicsEnvSet("BROKER_URL", "$(MQTT_TEST_BROKER_URL=mqtt://localhost:18830)")
 epicsEnvSet("CLIENT_ID", "$(MQTT_TEST_CLIENT_ID=epicsMQTT-test)")
 epicsEnvSet("QOS", "1")
 epicsEnvSet("P", "mqtt:test:")
