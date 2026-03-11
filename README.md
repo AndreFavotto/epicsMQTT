@@ -57,6 +57,11 @@ device support. For now, the supported interfaces are the following:
    - Paho 1.5.3: Follow
      [these](https://github.com/eclipse-paho/paho.mqtt.cpp?tab=readme-ov-file#build-the-paho-c-and-paho-c-libraries-together)
      instructions.
+
+  > Note: AutoparamDriver explicitly requires EPICS >= 7.0, see 
+  > [reference](https://github.com/Cosylab/autoparamDriver/blob/main/autoparamDriverSup/src/Makefile#L15). For this reason,
+  > this module requires EPICS 7.0 or later to be built and used.
+
 2. Clone this repository:
 
 ```shell
