@@ -22,11 +22,11 @@ Contributions are welcome - feel free to open issues and pull requests!
 
 - Auto-update of EPICS PVS via `I/O Intr` records;
 - Support for read/write flat MQTT topics (i.e, topics where the payload is a single value or array);
+- Support for reading arbitrarily nested fields from JSON topic payloads;
 - Support for MQTT QoS levels;
 - Checks and reject invalid messages (based mostly on type-checking);
 - Auto reconnection of broker;
 - Planned - short term:
-  - Support for parsing fields from one-level JSON topic payloads
   - Support for MQTT retained messages.
   - Support for MQTT last will messages.
   - Support for MQTT authentication and TLS.
@@ -114,10 +114,12 @@ device support. For now, the supported interfaces are the following:
 Where:
 
 - `<PORT>` is the name of the asyn port defined in the `asynPortDriver` configuration.
-- `<FORMAT>`is the format of the payload, either `FLAT` or `JSON`. For now, only `FLAT` is supported.
+- `<FORMAT>` is the format of the payload: `FLAT` or `JSON`.
 - `<TYPE>` is the general type of the expected value [`INT|FLOAT|DIGITAL|STRING|INTARRAY|FLOATARRAY`].
 - `<TOPIC>` is the MQTT topic to which the record will be subscribed/published.
-- `<FIELD>` is an optional field name to be used when parsing JSON payloads (not yet implemented).
+- `<FIELD>` is the dot-separated path to the field to extract from a JSON payload (e.g. `sensor.temperature`). Arbitrary nesting is supported. Required when `FORMAT` is `JSON`.
+
+> **Note on JSON write support:** Writing to JSON-formatted topics is currently **not supported**. At the moment the driver has no way of knowing the JSON structure expected by the broker ahead of time for write records. For this reason, only `FLAT` format can be used for output records.
 
 **Important: Due to the pub/sub nature of MQTT, ALL input records are expected to be `I/O Intr`.**
 
@@ -162,17 +164,21 @@ Example:
 
 ## Implementation status
 
-Below is a table with the supported interfaces for the FLAT topics, example of I/O link strings and current status of
-the implementation. The JSON payload support is planned to come next.
+Below are the supported interfaces and their implementation status.
 
-| Message type        | Asyn Parameter Type                    | `FORMAT:TYPE` string to use | Status    |
-| ------------------- | -------------------------------------- | --------------------------- | --------- |
-| Integer             | asynInt32                              | `FLAT:INT`                  | Supported |
-| Float               | asynFloat64                            | `FLAT:FLOAT`                | Supported |
-| Bit masked integers | asynUInt32Digital                      | `FLAT:DIGITAL`              | Supported |
-| Strings             | asynOctetRead/asynOctetWrite           | `FLAT:STRING`               | Supported |
-| Integer Array       | asynInt32ArrayIn/asynInt32ArrayOut     | `FLAT:INTARRAY`             | Supported |
-| Float Array         | asynFloat64ArrayIn/asynFloat64ArrayOut | `FLAT:FLOATARRAY`           | Supported |
+
+| Message type        | Asyn Parameter Type                    | `FORMAT:TYPE` string to use | Direction    | Status    |
+| ------------------- | -------------------------------------- | --------------------------- | ------------ | --------- |
+| Integer             | asynInt32                              | `FLAT:INT`                  | Read / Write | Supported |
+| Float               | asynFloat64                            | `FLAT:FLOAT`                | Read / Write | Supported |
+| Bit masked integers | asynUInt32Digital                      | `FLAT:DIGITAL`              | Read / Write | Supported |
+| Strings             | asynOctetRead/asynOctetWrite           | `FLAT:STRING`               | Read / Write | Supported |
+| Integer Array       | asynInt32ArrayIn/asynInt32ArrayOut     | `FLAT:INTARRAY`             | Read / Write | Supported |
+| Float Array         | asynFloat64ArrayIn/asynFloat64ArrayOut | `FLAT:FLOATARRAY`           | Read / Write | Supported |
+| Integer             | asynInt32                              | `JSON:INT`                  | Read only    | Supported |
+| Float               | asynFloat64                            | `JSON:FLOAT`                | Read only    | Supported |
+| Bit masked          | asynUInt32Digital                      | `JSON:DIGITAL`              | Read only    | Supported |
+| String              | asynOctetRead                          | `JSON:STRING`               | Read only    | Supported |
 
 ## Licensing Terms
 
