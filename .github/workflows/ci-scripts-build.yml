@@ -1,0 +1,79 @@
+name: mqtt
+
+on:
+  push:
+    paths-ignore:
+      - "documentation/*"
+      - "**/*.html"
+      - "**/*.md"
+  pull_request:
+
+env:
+  SETUP_PATH: .ci-local:.ci
+
+jobs:
+  build-base:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # Set environment variables from matrix parameters
+    env:
+      SET: modules
+      CMP: ${{ matrix.cmp }}
+      BASE: ${{ matrix.base }}
+      BCFG: ${{ matrix.configuration }}
+      APT: libtirpc-dev
+    strategy:
+      fail-fast: false
+      matrix:
+        # Job names also name artifacts, character limitations apply
+        include:
+          - os: ubuntu-latest
+            cmp: gcc
+            configuration: default
+            base: "R7.0.9"
+            name: "7.0.9 Ubuntu latest"
+
+          - os: ubuntu-22.04
+            cmp: gcc
+            configuration: default
+            base: "R7.0.9"
+            name: "7.0.9 Ubuntu 22.04"
+
+          - os: ubuntu-22.04
+            cmp: gcc
+            configuration: default
+            base: "7.0"
+            name: "7.0 Ubuntu 22.04"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: "Install system dependencies"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libssl-dev mosquitto
+
+      - name: Install Paho MQTT Cpp library
+        run: |
+          .ci-local/install-paho.sh
+
+      - name: Prepare and compile dependencies
+        run: python .ci/cue.py prepare
+
+      - name: Build main module
+        run: python .ci/cue.py build
+
+      - name: Run main module tests
+        run: python .ci/cue.py -T 15M test
+
+      - name: Collect and show test results
+        if: ${{ always() }}
+        run: python .ci/cue.py -T 5M test-results
+
+      - name: Install MQTT pytest dependencies
+        run: python -m pip install pytest p4p
+
+      - name: Run MQTT round-trip tests
+        run: pytest -q tests

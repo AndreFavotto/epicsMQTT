@@ -1,11 +1,18 @@
-#!../../bin/linux-x86_64/mqtt
+#!../../bin/linux-x86_64/example
+
+#- SPDX-FileCopyrightText: 2003 Argonne National Laboratory
+#-
+#- SPDX-License-Identifier: EPICS
+
+#- You may have to change example to something else
+#- everywhere it appears in this file
 
 < envPaths
 
 cd "${TOP}"
 
 ## Register all support components
-dbLoadDatabase "dbd/mqtt.dbd"
+dbLoadDatabase "dbd/example.dbd"
 mqtt_registerRecordDeviceDriver pdbbase
 
 epicsEnvSet("PORT", "test")
@@ -18,6 +25,6 @@ epicsEnvSet("R", "mqtt:")
 mqttDriverConfigure($(PORT), $(BROKER_URL), $(CLIENT_ID), $(QOS))
 
 ## Load record instances
-dbLoadRecords("${TOP}/mqttApp/Db/mqtt.db", "P=$(P), R=$(R), PORT=$(PORT)")
+dbLoadRecords("db/example.db", "P=$(P), R=$(R), PORT=$(PORT)")
 cd "${TOP}/iocBoot/${IOC}"
 iocInit

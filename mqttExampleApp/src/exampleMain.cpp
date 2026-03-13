@@ -1,4 +1,8 @@
-/* mqttMain.cpp */
+// SPDX-FileCopyrightText: 2000 Argonne National Laboratory
+//
+// SPDX-License-Identifier: EPICS
+
+/* exampleMain.cpp */
 /* Author:  Marty Kraimer Date:    17MAR2000 */
 
 #include <stddef.h>

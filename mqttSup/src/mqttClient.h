@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Favoto
+
 #ifndef MQTTCLIENT_H
 #define MQTTCLIENT_H
 #include <mqtt/async_client.h>

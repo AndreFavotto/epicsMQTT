@@ -1,0 +1,72 @@
+record(ai, "$(P)$(R)Int32Input") {
+	field(DESC, "CI Int32 Input")
+	field(DTYP, "asynInt32")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) FLAT:INT $(TOPIC_ROOT)/int")
+}
+
+record(ao, "$(P)$(R)Int32Output") {
+	field(DESC, "CI Int32 Output")
+	field(DTYP, "asynInt32")
+	field(OUT, "@asyn($(PORT)) FLAT:INT $(TOPIC_ROOT)/int")
+}
+
+record(ai, "$(P)$(R)Float64Input") {
+	field(DESC, "CI Float64 Input")
+	field(DTYP, "asynFloat64")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) FLAT:FLOAT $(TOPIC_ROOT)/float")
+}
+
+record(ao, "$(P)$(R)Float64Output") {
+	field(DESC, "CI Float64 Output")
+	field(DTYP, "asynFloat64")
+	field(OUT, "@asyn($(PORT)) FLAT:FLOAT $(TOPIC_ROOT)/float")
+}
+
+record(stringin, "$(P)$(R)StringInput") {
+	field(DESC, "CI String Input")
+	field(DTYP, "asynOctetRead")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) FLAT:STRING $(TOPIC_ROOT)/string")
+}
+
+record(stringout, "$(P)$(R)StringOutput") {
+	field(DESC, "CI String Output")
+	field(DTYP, "asynOctetWrite")
+	field(OUT, "@asyn($(PORT)) FLAT:STRING $(TOPIC_ROOT)/string")
+}
+
+record(aai, "$(P)$(R)IntArrayInput") {
+	field(DESC, "CI Int Array Input")
+	field(DTYP, "asynInt32ArrayIn")
+	field(SCAN, "I/O Intr")
+	field(FTVL, "LONG")
+	field(NELM, "16")
+	field(INP, "@asyn($(PORT)) FLAT:INTARRAY $(TOPIC_ROOT)/intarray")
+}
+
+record(aao, "$(P)$(R)IntArrayOutput") {
+	field(DESC, "CI Int Array Output")
+	field(DTYP, "asynInt32ArrayOut")
+	field(FTVL, "LONG")
+	field(NELM, "16")
+	field(OUT, "@asyn($(PORT)) FLAT:INTARRAY $(TOPIC_ROOT)/intarray")
+}
+
+record(aai, "$(P)$(R)FloatArrayInput") {
+	field(DESC, "CI Float Array Input")
+	field(DTYP, "asynFloat64ArrayIn")
+	field(SCAN, "I/O Intr")
+	field(FTVL, "DOUBLE")
+	field(NELM, "16")
+	field(INP, "@asyn($(PORT)) FLAT:FLOATARRAY $(TOPIC_ROOT)/floatarray")
+}
+
+record(aao, "$(P)$(R)FloatArrayOutput") {
+	field(DESC, "CI Float Array Output")
+	field(DTYP, "asynFloat64ArrayOut")
+	field(FTVL, "DOUBLE")
+	field(NELM, "16")
+	field(OUT, "@asyn($(PORT)) FLAT:FLOATARRAY $(TOPIC_ROOT)/floatarray")
+}
