@@ -33,6 +33,10 @@ mqttSupport_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
 
 USR_INCLUDES += -I$(PAHO_CPP_INC)
 USR_LDFLAGS += -L$(PAHO_CPP_LIB) -Wl,-rpath,$(PAHO_CPP_LIB)
+
+# nlohmann json.hpp
+USR_INCLUDES += -Ijson/json.hpp
+
 mqttSupport_SYS_LIBS += paho-mqttpp3 
 mqttSupport_SYS_LIBS += paho-mqtt3as
 

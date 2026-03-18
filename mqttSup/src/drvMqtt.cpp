@@ -20,6 +20,21 @@
 #define JSON_STRING_FUNC_STR      JSON_FUNC_PREFIX ":STRING"
 #define JSON_INTARRAY_FUNC_STR    JSON_FUNC_PREFIX ":INTARRAY"
 #define JSON_FLOATARRAY_FUNC_STR  JSON_FUNC_PREFIX ":FLOATARRAY"
+
+const std::unordered_set<std::string> MqttDriver::supportedTopicTypes = {
+  FLAT_INT_FUNC_STR,
+  FLAT_FLOAT_FUNC_STR,
+  FLAT_DIGITAL_FUNC_STR,
+  FLAT_STRING_FUNC_STR,
+  FLAT_INTARRAY_FUNC_STR,
+  FLAT_FLOATARRAY_FUNC_STR,
+  JSON_INT_FUNC_STR,
+  JSON_FLOAT_FUNC_STR,
+  JSON_DIGITAL_FUNC_STR,
+  JSON_STRING_FUNC_STR,
+  JSON_INTARRAY_FUNC_STR,
+  JSON_FLOATARRAY_FUNC_STR
+};
 //#############################################################################################
 // autoParam-specific definitions
 
@@ -28,29 +43,56 @@ bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
   const MqttTopicAddr& cmp = static_cast<const MqttTopicAddr&>(comparedAddr);
   if (format != cmp.format) return false;
   switch (format) {
-    case Flat:
+    case FLAT:
       return topicName == cmp.topicName;
-    case Json:
+    case JSON:
       return topicName == cmp.topicName && jsonField == cmp.jsonField;
   }
   return false;
 }
 
 DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::string const& arguments) {
+  const char* functionName = __FUNCTION__;
   MqttTopicAddr* addr = new MqttTopicAddr;
-  std::istringstream argsStream(arguments);
+  if (!isSupportedTopicType(function)) {
+    fprintf(stderr, "%s::%s: Invalid topic type: %s\n", driverName, functionName, function.c_str());
+    delete addr;
+    return nullptr;
+  }
   auto colonPos = function.find(':');
-  std::string prefix = (colonPos == std::string::npos) ? function : function.substr(0, colonPos);
-  std::string type = (colonPos == std::string::npos) ? "" : function.substr(colonPos + 1);
-  //TODO: add error handling for malformed arguments
+  std::string prefix = function.substr(0, colonPos);
   if (prefix == FLAT_FUNC_PREFIX) {
-    addr->format = MqttTopicAddr::Flat;
-    argsStream >> addr->topicName;
+    std::string topicName = arguments;
+    if (!isValidTopicName(topicName)) {
+      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
+      delete addr;
+      return nullptr;
+    }
+    addr->format = MqttTopicAddr::FLAT;
+    addr->topicName = topicName;
   }
   else if (prefix == JSON_FUNC_PREFIX) {
-    addr->format = MqttTopicAddr::Json;
-    argsStream >> addr->topicName;
-    argsStream >> addr->jsonField;
+    auto spacePos = arguments.find(' ');
+    if (spacePos == std::string::npos) {
+      fprintf(stderr, "%s::%s: JSON field not specified: %s\n", driverName, functionName, arguments.c_str());
+      delete addr;
+      return nullptr;
+    }
+    if (spacePos + 1 >= arguments.size()) {
+      fprintf(stderr, "%s::%s: JSON field is empty: %s\n", driverName, functionName, arguments.c_str());
+      delete addr;
+      return nullptr;
+    }
+    std::string topicName = arguments.substr(0, spacePos);
+    if (!isValidTopicName(topicName)) {
+      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
+      delete addr;
+      return nullptr;
+    }
+    std::string jsonField = arguments.substr(spacePos + 1, arguments.size());
+    addr->format = MqttTopicAddr::JSON;
+    addr->topicName = topicName;
+    addr->jsonField = jsonField;
   }
   else {
     delete addr;
@@ -203,6 +245,7 @@ void MqttDriver::onPublishCb(Autoparam::Driver* driver, const std::string& topic
 void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic, const std::string& payload) {
   auto* pself = static_cast<MqttDriver*>(driver);
   const char* functionName = __FUNCTION__;
+  std::string val = payload;
   pself->lock();
   auto vars = pself->getInterruptVariables();
   for (auto itr = vars.begin(); itr != vars.end(); itr++) {
@@ -210,29 +253,47 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
     MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
     if (addr.topicName != topic)
       continue;
+    if (addr.format == MqttTopicAddr::JSON) {
+      try {
+        json root = json::parse(payload);
+        const json* fieldAddr = findJsonField(root, addr.jsonField);
+        if (!fieldAddr || fieldAddr->is_null())
+          throw std::invalid_argument("JSON field not found: " + addr.jsonField);
+        if (fieldAddr->is_string())
+          val = fieldAddr->get<std::string>();
+        else
+          val = fieldAddr->dump();
+      }
+      catch (const std::exception& e) {
+        asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
+          "%s::%s: Failed to parse JSON payload for topic '%s', field '%s': %s\n",
+          driverName, functionName, topic.c_str(), addr.jsonField.c_str(), e.what());
+        continue;
+      }
+    }
     int index = deviceVar.asynIndex();
     try {
       switch (deviceVar.asynType()) {
         case asynParamInt32:
-          if (!isInteger(payload)) throw std::invalid_argument("Invalid integer");
-          pself->setParam(deviceVar, std::stoi(payload), asynSuccess);
+          if (!isInteger(val)) throw std::invalid_argument("Invalid integer");
+          pself->setParam(deviceVar, std::stoi(val), asynSuccess);
           break;
         case asynParamFloat64:
-          if (!isFloat(payload)) throw std::invalid_argument("Invalid float");
-          pself->setParam(deviceVar, std::stod(payload), asynSuccess);
+          if (!isFloat(val)) throw std::invalid_argument("Invalid float");
+          pself->setParam(deviceVar, std::stod(val), asynSuccess);
           break;
         case asynParamUInt32Digital:
-          if (!isInteger(payload, false)) throw std::invalid_argument("Invalid unsigned integer");
-          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(payload)), asynSuccess);
+          if (!isInteger(val, false)) throw std::invalid_argument("Invalid unsigned integer");
+          pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(val)), asynSuccess);
           break;
         case asynParamOctet:
           // use asyn directly - setParam octet overload is not defined in runtime. TODO: investigate
-          pself->setStringParam(index, payload.c_str());
+          pself->setStringParam(index, val.c_str());
           break;
         case asynParamInt32Array:
         {
           std::vector<epicsInt32> auxArray;
-          asynStatus parseStatus = checkAndParseIntArray(payload, auxArray);
+          asynStatus parseStatus = checkAndParseIntArray(val, auxArray);
           Autoparam::Array<epicsInt32> dataArray(auxArray.data(), auxArray.size());
           if (parseStatus == asynSuccess) {
             pself->doCallbacksArray(deviceVar, dataArray, asynSuccess);
@@ -243,7 +304,7 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
         case asynParamFloat64Array:
         {
           std::vector<epicsFloat64> auxArray;
-          asynStatus parseStatus = checkAndParseFloatArray(payload, auxArray);
+          asynStatus parseStatus = checkAndParseFloatArray(val, auxArray);
           Autoparam::Array<epicsFloat64> dataArray(auxArray.data(), auxArray.size());
           if (parseStatus == asynSuccess) {
             pself->doCallbacksArray(deviceVar, dataArray, asynSuccess);
@@ -266,6 +327,42 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
 }
 //#############################################################################################
 // Helper methods
+
+// Recursively search for a key anywhere in the JSON structure
+const json* MqttDriver::findJsonField(const json& payload, const std::string& targetKey) {
+  if (payload.is_object()) {
+    for (auto it = payload.begin(); it != payload.end(); ++it) {
+      if (it.key() == targetKey) {
+        return &it.value();
+      }
+      else {
+        const json* found = findJsonField(it.value(), targetKey);
+        if (found) return found;
+      }
+    }
+  }
+  else if (payload.is_array()) {
+    for (const auto& el : payload) {
+      const json* found = findJsonField(el, targetKey);
+      if (found) return found;
+    }
+  }
+  return nullptr;
+}
+
+/* Checks if a string corresponds to one of the supported topic types */
+bool MqttDriver::isSupportedTopicType(const std::string& type) {
+  return MqttDriver::supportedTopicTypes.find(type) != MqttDriver::supportedTopicTypes.end();
+}
+
+bool MqttDriver::isValidTopicName(const std::string& topicName) {
+  if (topicName.empty()) return false;
+  // Do not accept wildcard characters - one topic per record only
+  if (topicName.find('#') != std::string::npos || topicName.find('+') != std::string::npos) {
+    return false;
+  }
+  return true;
+}
 
 /* Checks if a string represents a signed or unsigned integer */
 bool MqttDriver::isInteger(const std::string& s, bool isSigned) {
@@ -468,11 +565,11 @@ WriteResult MqttDriver::integerWrite(DeviceVariable& deviceVar, epicsInt32 value
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   try {
-    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+    if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
       driver->mqttClient.publish(addr.topicName, std::to_string(value));
       status = asynSuccess;
     }
-    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+    else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       // TODO: implement JSON support for integer values
       throw std::logic_error("JSON support not implemented");
     }
@@ -496,7 +593,7 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   epicsUInt32 outVal = value;
   try {
-    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+    if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
       if (mask != 0xFFFFFFFF) {
         // read current value to avoid overwriting other bits when applying mask
         epicsUInt32 auxVal;
@@ -514,7 +611,7 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
       driver->mqttClient.publish(addr.topicName, std::to_string(outVal));
       status = asynSuccess;
     }
-    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+    else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       // TODO: implement JSON support for digital values
       throw std::logic_error("JSON support not implemented");
     }
@@ -537,11 +634,11 @@ WriteResult MqttDriver::floatWrite(DeviceVariable& deviceVar, epicsFloat64 value
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   try {
-    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+    if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
       driver->mqttClient.publish(addr.topicName, std::to_string(value));
       status = asynSuccess;
     }
-    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+    else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       // TODO: implement JSON support for float values
       throw std::logic_error("JSON support not implemented");
     }
@@ -565,7 +662,7 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   try {
-    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+    if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
       const epicsDataType* arrayData = reinterpret_cast<const epicsDataType*>(value.data());
       size_t count = value.size();
 
@@ -577,7 +674,7 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
       driver->mqttClient.publish(topicName, oss.str());
       status = asynSuccess;
     }
-    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+    else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       // TODO: implement JSON support for array values
       throw std::logic_error("JSON support not implemented");
     }
@@ -600,14 +697,14 @@ WriteResult MqttDriver::stringWrite(DeviceVariable& deviceVar, Octet const& valu
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   try {
-    if (addr.format == MqttTopicAddr::TopicFormat::Flat) {
+    if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
       std::vector<char> stringData(value.maxSize());
       if (value.writeTo(stringData.data(), stringData.size())) {
         driver->mqttClient.publish(addr.topicName, stringData.data());
         status = asynSuccess;
       }
     }
-    else if (addr.format == MqttTopicAddr::TopicFormat::Json) {
+    else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       // TODO: implement JSON support for string values
       throw std::logic_error("JSON support not implemented");
     }
