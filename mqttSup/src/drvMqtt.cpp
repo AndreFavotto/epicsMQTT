@@ -256,13 +256,7 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
     if (addr.format == MqttTopicAddr::JSON) {
       try {
         json root = json::parse(payload);
-        const json* fieldAddr = findJsonField(root, addr.jsonField);
-        if (!fieldAddr || fieldAddr->is_null())
-          throw std::invalid_argument("JSON field not found: " + addr.jsonField);
-        if (fieldAddr->is_string())
-          val = fieldAddr->get<std::string>();
-        else
-          val = fieldAddr->dump();
+        val = to_string(root.at(json::json_pointer(addr.jsonField)));
       }
       catch (const std::exception& e) {
         asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
@@ -335,28 +329,6 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
 }
 //#############################################################################################
 // Helper methods
-
-// Recursively search for a key anywhere in the JSON structure
-const json* MqttDriver::findJsonField(const json& payload, const std::string& targetKey) {
-  if (payload.is_object()) {
-    for (auto it = payload.begin(); it != payload.end(); ++it) {
-      if (it.key() == targetKey) {
-        return &it.value();
-      }
-      else {
-        const json* found = findJsonField(it.value(), targetKey);
-        if (found) return found;
-      }
-    }
-  }
-  else if (payload.is_array()) {
-    for (const auto& el : payload) {
-      const json* found = findJsonField(el, targetKey);
-      if (found) return found;
-    }
-  }
-  return nullptr;
-}
 
 /* Checks if a string corresponds to one of the supported topic types */
 bool MqttDriver::isSupportedTopicType(const std::string& type) {
