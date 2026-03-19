@@ -17,6 +17,7 @@
 
 using namespace Autoparam::Convenience;
 using json = nlohmann::json;
+using std::to_string;
 
 static const char* driverName = "MqttDriver";
 
@@ -59,7 +60,6 @@ private:
   DeviceAddress* parseDeviceAddress(std::string const& function, std::string const& arguments);
   DeviceVariable* createDeviceVariable(DeviceVariable* baseVar);
   /* helper methods */
-  static const json* findJsonField(const json& payload, const std::string& targetKey);
   static bool isInteger(const std::string& s, bool isSigned = true);
   static bool isFloat(const std::string& s);
   static bool isSign(char character);
