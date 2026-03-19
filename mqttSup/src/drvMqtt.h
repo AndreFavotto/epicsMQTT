@@ -61,6 +61,7 @@ private:
   /* helper methods */
   static const json* findJsonField(const json& payload, const std::string& targetKey);
   static bool isInteger(const std::string& s, bool isSigned = true);
+  static bool isBoolean(const std::string& s);
   static bool isFloat(const std::string& s);
   static bool isSign(char character);
   static bool isSupportedTopicType(const std::string& type);
