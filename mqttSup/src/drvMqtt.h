@@ -78,7 +78,6 @@ public:
 
   TopicFormat format;
   std::string topicName;
-  std::string jsonField;
   epicsUInt32 mask = 0xFFFFFFFF;
   bool operator==(DeviceAddress const& comparedAddr) const;
 };

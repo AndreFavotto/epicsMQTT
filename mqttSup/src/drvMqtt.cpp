@@ -44,13 +44,7 @@ const std::unordered_set<std::string> MqttDriver::supportedTopicTypes = {
 bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
   const MqttTopicAddr& cmp = static_cast<const MqttTopicAddr&>(comparedAddr);
   if (format != cmp.format) return false;
-  switch (format) {
-    case FLAT:
-      return topicName == cmp.topicName;
-    case JSON:
-      return topicName == cmp.topicName && jsonField == cmp.jsonField;
-  }
-  return false;
+  return topicName == cmp.topicName;
 }
 
 DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::string const& arguments) {
@@ -63,44 +57,26 @@ DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::
   }
   auto colonPos = function.find(':');
   std::string prefix = function.substr(0, colonPos);
-  if (prefix == FLAT_FUNC_PREFIX) {
-    std::string topicName = arguments;
-    if (!isValidTopicName(topicName)) {
-      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
-      delete addr;
-      return nullptr;
-    }
-    addr->format = MqttTopicAddr::FLAT;
-    addr->topicName = topicName;
-  }
-  else if (prefix == JSON_FUNC_PREFIX) {
-    auto spacePos = arguments.find(' ');
-    if (spacePos == std::string::npos) {
-      fprintf(stderr, "%s::%s: JSON field not specified: %s\n", driverName, functionName, arguments.c_str());
-      delete addr;
-      return nullptr;
-    }
-    if (spacePos + 1 >= arguments.size()) {
-      fprintf(stderr, "%s::%s: JSON field is empty: %s\n", driverName, functionName, arguments.c_str());
-      delete addr;
-      return nullptr;
-    }
-    std::string topicName = arguments.substr(0, spacePos);
-    if (!isValidTopicName(topicName)) {
-      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
-      delete addr;
-      return nullptr;
-    }
-    std::string jsonField = arguments.substr(spacePos + 1, arguments.size());
-    addr->format = MqttTopicAddr::JSON;
-    addr->topicName = topicName;
-    addr->jsonField = jsonField;
-  }
-  else {
+  std::string topicName = arguments;
+  if (!isValidTopicName(topicName)) {
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Invalid topic name: %s", driverName, functionName, topicName.c_str());
     delete addr;
     return nullptr;
   }
-
+  addr->topicName = topicName;
+  if (prefix == FLAT_FUNC_PREFIX) {
+    addr->format = MqttTopicAddr::FLAT;
+  } else if (prefix == JSON_FUNC_PREFIX) {
+    if (!jsonConfig.contains(arguments)) {
+      asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Json config file does not include %s", driverName, functionName, arguments.c_str());
+      delete addr;
+      return nullptr;
+    }
+    addr->format = MqttTopicAddr::JSON;
+  } else {
+    delete addr;
+    return nullptr;
+  }
   return addr;
 }
 
@@ -288,13 +264,14 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
       continue;
     if (addr.format == MqttTopicAddr::JSON) {
       try {
+        std::string value_pointer = pself->jsonConfig[topic]["/fields/VAL"_json_pointer];
         json root = json::parse(payload);
-        val = to_string(root.at(json::json_pointer(addr.jsonField)));
+        val = to_string(root[json::json_pointer(value_pointer)]);
       }
       catch (const std::exception& e) {
         asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
-          "%s::%s: Failed to parse JSON payload for topic '%s', field '%s': %s\n",
-          driverName, functionName, topic.c_str(), addr.jsonField.c_str(), e.what());
+          "%s::%s: Failed to parse JSON payload for topic '%s' : %s\n",
+          driverName, functionName, topic.c_str(), e.what());
         continue;
       }
     }
