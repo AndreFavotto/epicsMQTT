@@ -2,7 +2,9 @@
 // Copyright (C) 2026 André Favoto
 
 #include "drvMqtt.h"
+#include "asynDriver.h"
 #include "mqttClient.h"
+#include <fstream>
 
 // Supported type definitions
 
@@ -176,6 +178,37 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
   registerHandlers<Array<epicsInt32>>(JSON_INTARRAY_FUNC_STR, NULL, arrayWrite, NULL);
   registerHandlers<Array<epicsFloat64>>(JSON_FLOATARRAY_FUNC_STR, NULL, arrayWrite, NULL);
 }
+
+/* MqttDriver constructor with json configFile parsing */
+MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* mqttClientID, const int qos, const char* configFile)
+  : MqttDriver(portName, brokerUrl, mqttClientID, qos)
+{
+  std::ifstream file(configFile, std::ios::in);
+  if (!file.is_open()) {
+    throw std::runtime_error("Unable to open JSON config file: " + std::string(configFile));
+  }
+  json content = json::parse(file);
+
+  // ensure that json config file has the expected structure
+  for (auto [topicName, topic]: content.items()) {
+    if (!topic.is_object()) {
+      throw std::runtime_error("JSON config for MQTT topic " + topicName + " could not be parsed as json object");
+    }
+    if (!topic["fields"].is_object()) {
+      throw std::runtime_error("JSON field config for " + topicName + " is not a JSON object");
+    }
+    if (!topic.contains("template")) continue;
+    // if template exists, verify that every field can be mapped into the field.
+    for (auto [fieldName, field]: topic["fields"].items()) {
+      if (!topic["template"].contains(json::json_pointer(field))) {
+        throw std::runtime_error("JSON template for " + topicName + " does not include " + fieldName);
+      }
+    }
+    asynPrint(pasynUserSelf, ASYN_TRACE_FLOW, "Identified JSON configuration for %s\n", topicName.c_str());
+  }
+  jsonConfig = content;
+}
+
 /* Class destructor
    - Disconnects from the broker and cleans session
 */
@@ -710,36 +743,51 @@ extern "C" {
     new MqttDriver(portName, brokerUrl, mqttClientID, qos);
     return(asynSuccess);
   }
+  int mqttJsonDriverConfigure(const char* portName, const char* brokerUrl, const char* mqttClientID, const int qos, const char* configFile) {
+    new MqttDriver(portName, brokerUrl, mqttClientID, qos, configFile);
+    return(asynSuccess);
+  }
   static const int numArgs = 4;
   static const iocshArg initArg0 = { "portName", iocshArgString };
   static const iocshArg initArg1 = { "brokerUrl", iocshArgString };
   static const iocshArg initArg2 = { "mqttClientID", iocshArgString };
   static const iocshArg initArg3 = { "qos", iocshArgInt };
+  static const iocshArg initArg4 = { "configFile", iocshArgString };
   static const iocshArg* const initArgs[] = {
       &initArg0,
       &initArg1,
       &initArg2,
-      &initArg3
+      &initArg3,
+      &initArg4
   };
   static const char* usage =
     "MqttDriverConfigure(portName, brokerUrl, mqttClientID, qos)\n"
     "  portName: Asyn port name to be used\n"
     "  brokerUrl: Broker IP or hostname (e.g: mqtt://localhost:1883)\n"
     "  mqttClientID: ClientID to be used - must be unique\n"
-    "  qos: Desired quality of service (QoS) for the connection [0|1|2]\n";
+    "  qos: Desired quality of service (QoS) for the connection [0|1|2]\n"
+    "  [configFile]: path to JSON configuration file";
 
   //#############################################################################################
   static const iocshFuncDef initFuncDef = { "mqttDriverConfigure", numArgs, initArgs, usage };
+  static const iocshFuncDef jsonInitFuncDef = { "mqttJsonDriverConfigure", 5, initArgs, usage };
 
   //#############################################################################################
   static void initCallFunc(const iocshArgBuf* args) {
     mqttDriverConfigure(args[0].sval, args[1].sval, args[2].sval, args[3].ival);
+  }
+  static void jsonInitCallFunc(const iocshArgBuf* args) {
+    mqttJsonDriverConfigure(args[0].sval, args[1].sval, args[2].sval, args[3].ival, args[4].sval);
   }
 
   //#############################################################################################
   void mqttDriverRegister(void) {
     iocshRegister(&initFuncDef, initCallFunc);
   }
+  void mqttJsonDriverRegister(void) {
+    iocshRegister(&jsonInitFuncDef, jsonInitCallFunc);
+  }
 
   epicsExportRegistrar(mqttDriverRegister);
+  epicsExportRegistrar(mqttJsonDriverRegister);
 }

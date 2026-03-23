@@ -25,6 +25,7 @@ class MqttDriver : public Autoparam::Driver {
 public:
   /* Constructor */
   MqttDriver(const char* portName, const char* mqttBrokerAddr, const char* mqttClientID, const int qos);
+  MqttDriver(const char* portName, const char* mqttBrokerAddr, const char* mqttClientID, const int qos, const char* configFile);
   /* Destructor */
   ~MqttDriver();
   /*! \brief Supported types for MQTT topics.
@@ -68,6 +69,7 @@ private:
   static bool isValidTopicName(const std::string& topicName);
   static asynStatus checkAndParseIntArray(const std::string& s, std::vector<epicsInt32>& out);
   static asynStatus checkAndParseFloatArray(const std::string& s, std::vector<epicsFloat64>& out);
+  json jsonConfig;
 };
 
 class MqttTopicAddr : public DeviceAddress {
