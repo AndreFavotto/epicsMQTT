@@ -275,6 +275,10 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
     try {
       switch (deviceVar.asynType()) {
         case asynParamInt32:
+          if (isBoolean(val)) {
+            pself->setParam(deviceVar, static_cast<epicsInt32>(val == "true"), asynSuccess);
+            break;
+          }
           if (!isInteger(val)) throw std::invalid_argument("Invalid integer");
           pself->setParam(deviceVar, std::stoi(val), asynSuccess);
           break;
@@ -283,6 +287,10 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
           pself->setParam(deviceVar, std::stod(val), asynSuccess);
           break;
         case asynParamUInt32Digital:
+          if (isBoolean(val)) {
+            pself->setParam(deviceVar, static_cast<epicsUInt32>(val == "true"), asynSuccess);
+            break;
+          }
           if (!isInteger(val, false)) throw std::invalid_argument("Invalid unsigned integer");
           pself->setParam(deviceVar, static_cast<epicsUInt32>(std::stoul(val)), asynSuccess);
           break;
@@ -374,6 +382,11 @@ bool MqttDriver::isInteger(const std::string& s, bool isSigned) {
     if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
   }
   return true;
+}
+
+/* Checks if a string represents a json boolean value */
+bool MqttDriver::isBoolean(const std::string& s) {
+  return (s == "true" || s == "false");
 }
 
 /* Checks if a string represents a float */
