@@ -61,6 +61,7 @@ private:
   DeviceAddress* parseDeviceAddress(std::string const& function, std::string const& arguments);
   DeviceVariable* createDeviceVariable(DeviceVariable* baseVar);
   /* helper methods */
+  static std::string composeJsonWrite(MqttDriver* deviceVar, std::string& topicName, json value);
   static bool isInteger(const std::string& s, bool isSigned = true);
   static bool isBoolean(const std::string& s);
   static bool isFloat(const std::string& s);
