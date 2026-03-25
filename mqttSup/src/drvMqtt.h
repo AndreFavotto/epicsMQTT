@@ -79,8 +79,10 @@ public:
 
   TopicFormat format;
   std::string topicName;
+  std::string writeAddress;
   epicsUInt32 mask = 0xFFFFFFFF;
   bool operator==(DeviceAddress const& comparedAddr) const;
+  bool writeable;
 };
 
 class MqttTopicVariable : public DeviceVariable {

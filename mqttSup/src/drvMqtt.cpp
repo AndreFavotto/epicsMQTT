@@ -53,6 +53,8 @@ DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::
   std::string topicName = arguments;
   auto colonPos = function.find(':');
   std::string prefix = function.substr(0, colonPos);
+  std::string writeAddress = topicName;
+  bool writable = true;
 
   if (!isSupportedTopicType(function)) {
     fprintf(stderr, "%s::%s: Invalid topic type: %s\n", driverName, functionName, function.c_str());
@@ -69,6 +71,11 @@ DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::
       asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Json config file does not include %s", driverName, functionName, arguments.c_str());
       return nullptr;
     }
+    if (!this->jsonConfig[topicName].contains("template")) {
+      writable = false;
+    } else {
+      writeAddress = this->jsonConfig[topicName].value("writeAddress", topicName);
+    }
     format = MqttTopicAddr::JSON;
   } else {
     asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Unknown function type '%s', only JSON or FLAT is supported.", driverName, functionName, function.c_str());
@@ -77,7 +84,9 @@ DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::
 
   MqttTopicAddr* addr = new MqttTopicAddr;
   addr->topicName = topicName;
+  addr->writeAddress = writeAddress;
   addr->format = format;
+  addr->writeable = writable;
   return addr;
 }
 
@@ -171,14 +180,23 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
     if (!topic.is_object()) {
       throw std::runtime_error("JSON config for MQTT topic " + topicName + " could not be parsed as json object");
     }
-    if (!topic["fields"].is_object()) {
-      throw std::runtime_error("JSON field config for " + topicName + " is not a JSON object");
+    if (!topic.contains("fields") || !topic["fields"].is_object()) {
+      throw std::runtime_error("JSON field config for " + topicName + " is missing or is not a JSON object");
     }
-    if (!topic.contains("template")) continue;
-    // if template exists, verify that every field can be mapped into the field.
-    for (auto [fieldName, field]: topic["fields"].items()) {
-      if (!topic["template"].contains(json::json_pointer(field))) {
-        throw std::runtime_error("JSON template for " + topicName + " does not include " + fieldName);
+    if (topic.contains("writeAddress")) {
+      if (!topic["writeAddress"].is_string()) {
+        throw std::runtime_error("Write address for topic " + topicName + " was not a string");
+      }
+    } else {
+      // fall back (read and write into the same address)
+      topic["writeAddress"] = topicName;
+    }
+    if (topic.contains("template")) {
+      // if template exists, verify that every field can be mapped into the field.
+      for (auto [fieldName, field]: topic["fields"].items()) {
+        if (!topic["template"].contains(json::json_pointer(field))) {
+          throw std::runtime_error("JSON template for " + topicName + " does not include " + fieldName);
+        }
       }
     }
     asynPrint(pasynUserSelf, ASYN_TRACE_FLOW, "Identified JSON configuration for %s\n", topicName.c_str());
@@ -265,6 +283,7 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
       continue;
     if (addr.format == MqttTopicAddr::JSON) {
       try {
+        if (!pself->jsonConfig.contains(topic)) continue;
         std::string value_pointer = pself->jsonConfig[topic]["/fields/VAL"_json_pointer];
         json root = json::parse(payload);
         val = to_string(root[json::json_pointer(value_pointer)]);
@@ -577,14 +596,21 @@ WriteResult MqttDriver::integerWrite(DeviceVariable& deviceVar, epicsInt32 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
-      driver->mqttClient.publish(addr.topicName, std::to_string(value));
+      driver->mqttClient.publish(addr.writeAddress, std::to_string(value));
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       auto text = composeJsonWrite(driver, topicName, value);
-      driver->mqttClient.publish(addr.topicName, text);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -605,6 +631,13 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   epicsUInt32 outVal = value;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
       if (mask != 0xFFFFFFFF) {
@@ -621,12 +654,12 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
         auxVal &= (value | ~mask);
         outVal = auxVal;
       }
-      driver->mqttClient.publish(addr.topicName, std::to_string(outVal));
+      driver->mqttClient.publish(addr.writeAddress, std::to_string(outVal));
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       auto text = composeJsonWrite(driver, topicName, value);
-      driver->mqttClient.publish(addr.topicName, text);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -646,14 +679,21 @@ WriteResult MqttDriver::floatWrite(DeviceVariable& deviceVar, epicsFloat64 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
-      driver->mqttClient.publish(addr.topicName, std::to_string(value));
+      driver->mqttClient.publish(addr.writeAddress, std::to_string(value));
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       auto text = composeJsonWrite(driver, topicName, value);
-      driver->mqttClient.publish(addr.topicName, text);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -674,6 +714,13 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     const epicsDataType* arrayData = reinterpret_cast<const epicsDataType*>(value.data());
     size_t count = value.size();
@@ -683,7 +730,7 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
         if (i > 0) oss << ",";
         oss << arrayData[i];
       }
-      driver->mqttClient.publish(topicName, oss.str());
+      driver->mqttClient.publish(addr.writeAddress, oss.str());
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
@@ -692,7 +739,7 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
         data.push_back(arrayData[i]);
       }
       auto text = composeJsonWrite(driver, topicName, data);
-      driver->mqttClient.publish(addr.topicName, text);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -714,13 +761,20 @@ WriteResult MqttDriver::stringWrite(DeviceVariable& deviceVar, Octet const& valu
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   std::vector<char> stringData(value.maxSize());
   value.writeTo(stringData.data(), stringData.size());
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
-      driver->mqttClient.publish(addr.topicName, stringData.data());
+      driver->mqttClient.publish(addr.writeAddress, stringData.data());
       status = asynSuccess;
     } else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
       auto text = composeJsonWrite(driver, topicName, stringData.data());
-      driver->mqttClient.publish(addr.topicName, text);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
