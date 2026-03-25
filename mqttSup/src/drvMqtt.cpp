@@ -49,34 +49,35 @@ bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
 
 DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::string const& arguments) {
   const char* functionName = __FUNCTION__;
-  MqttTopicAddr* addr = new MqttTopicAddr;
-  if (!isSupportedTopicType(function)) {
-    fprintf(stderr, "%s::%s: Invalid topic type: %s\n", driverName, functionName, function.c_str());
-    delete addr;
-    return nullptr;
-  }
+  MqttTopicAddr::TopicFormat format;
+  std::string topicName = arguments;
   auto colonPos = function.find(':');
   std::string prefix = function.substr(0, colonPos);
-  std::string topicName = arguments;
-  if (!isValidTopicName(topicName)) {
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Invalid topic name: %s", driverName, functionName, topicName.c_str());
-    delete addr;
+
+  if (!isSupportedTopicType(function)) {
+    fprintf(stderr, "%s::%s: Invalid topic type: %s\n", driverName, functionName, function.c_str());
     return nullptr;
   }
-  addr->topicName = topicName;
+  if (!isValidTopicName(topicName)) {
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Invalid topic name: %s", driverName, functionName, topicName.c_str());
+    return nullptr;
+  }
   if (prefix == FLAT_FUNC_PREFIX) {
-    addr->format = MqttTopicAddr::FLAT;
+    format = MqttTopicAddr::FLAT;
   } else if (prefix == JSON_FUNC_PREFIX) {
     if (!jsonConfig.contains(arguments)) {
       asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Json config file does not include %s", driverName, functionName, arguments.c_str());
-      delete addr;
       return nullptr;
     }
-    addr->format = MqttTopicAddr::JSON;
+    format = MqttTopicAddr::JSON;
   } else {
-    delete addr;
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Unknown function type '%s', only JSON or FLAT is supported.", driverName, functionName, function.c_str());
     return nullptr;
   }
+
+  MqttTopicAddr* addr = new MqttTopicAddr;
+  addr->topicName = topicName;
+  addr->format = format;
   return addr;
 }
 
