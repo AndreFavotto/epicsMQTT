@@ -70,3 +70,102 @@ record(aao, "$(P)$(R)FloatArrayOutput") {
 	field(NELM, "16")
 	field(OUT, "@asyn($(PORT)) FLAT:FLOATARRAY $(TOPIC_ROOT)/floatarray")
 }
+
+record(ai, "$(P)$(R)JsonInt32Input") {
+	field(DESC, "CI Int32 Input")
+	field(DTYP, "asynInt32")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) JSON:INT $(TOPIC_ROOT)/json/int")
+}
+
+record(ao, "$(P)$(R)JsonInt32Output") {
+	field(DESC, "CI Int32 Output")
+	field(DTYP, "asynInt32")
+	field(OUT, "@asyn($(PORT)) JSON:INT $(TOPIC_ROOT)/json/int")
+}
+
+record(ai, "$(P)$(R)JsonFloat64Input") {
+	field(DESC, "CI Float64 Input")
+	field(DTYP, "asynFloat64")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) JSON:FLOAT $(TOPIC_ROOT)/json/float")
+}
+
+record(ao, "$(P)$(R)JsonFloat64Output") {
+	field(DESC, "CI Float64 Output")
+	field(DTYP, "asynFloat64")
+	field(OUT, "@asyn($(PORT)) JSON:FLOAT $(TOPIC_ROOT)/json/float")
+}
+
+record(stringin, "$(P)$(R)JsonStringInput") {
+	field(DESC, "CI String Input")
+	field(DTYP, "asynOctetRead")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) JSON:STRING $(TOPIC_ROOT)/json/string")
+}
+
+record(stringout, "$(P)$(R)JsonStringOutput") {
+	field(DESC, "CI String Output")
+	field(DTYP, "asynOctetWrite")
+	field(OUT, "@asyn($(PORT)) JSON:STRING $(TOPIC_ROOT)/json/string")
+}
+
+record(aai, "$(P)$(R)JsonIntArrayInput") {
+	field(DESC, "CI Int Array Input")
+	field(DTYP, "asynInt32ArrayIn")
+	field(SCAN, "I/O Intr")
+	field(FTVL, "LONG")
+	field(NELM, "16")
+	field(INP, "@asyn($(PORT)) JSON:INTARRAY $(TOPIC_ROOT)/json/intarray")
+}
+
+record(aao, "$(P)$(R)JsonIntArrayOutput") {
+	field(DESC, "CI Int Array Output")
+	field(DTYP, "asynInt32ArrayOut")
+	field(FTVL, "LONG")
+	field(NELM, "16")
+	field(OUT, "@asyn($(PORT)) JSON:INTARRAY $(TOPIC_ROOT)/json/intarray")
+}
+
+record(aai, "$(P)$(R)JsonFloatArrayInput") {
+	field(DESC, "CI Float Array Input")
+	field(DTYP, "asynFloat64ArrayIn")
+	field(SCAN, "I/O Intr")
+	field(FTVL, "DOUBLE")
+	field(NELM, "16")
+	field(INP, "@asyn($(PORT)) JSON:FLOATARRAY $(TOPIC_ROOT)/json/floatarray")
+}
+
+record(aao, "$(P)$(R)JsonFloatArrayOutput") {
+	field(DESC, "CI Float Array Output")
+	field(DTYP, "asynFloat64ArrayOut")
+	field(FTVL, "DOUBLE")
+	field(NELM, "16")
+	field(OUT, "@asyn($(PORT)) JSON:FLOATARRAY $(TOPIC_ROOT)/json/floatarray")
+}
+
+record(ai, "$(P)$(R)AltAddressInput") {
+	field(DESC, "CI Alt Address Input")
+	field(DTYP, "asynInt32")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) FLAT:INT $(TOPIC_ROOT)/json/altAddress2")
+}
+
+record(ao, "$(P)$(R)JsonAltAddressOutput") {
+	field(DESC, "CI Alt Address Output")
+	field(DTYP, "asynInt32")
+	field(OUT, "@asyn($(PORT)) JSON:INT $(TOPIC_ROOT)/json/altAddress")
+}
+
+record(ai, "$(P)$(R)JsonAltAddressInput") {
+	field(DESC, "CI Template Input")
+	field(DTYP, "asynInt32")
+	field(SCAN, "I/O Intr")
+	field(INP, "@asyn($(PORT)) JSON:INT $(TOPIC_ROOT)/json/writeTemplate")
+}
+
+record(ao, "$(P)$(R)JsonAltAddressOutput") {
+	field(DESC, "CI Template Output")
+	field(DTYP, "asynInt32")
+	field(OUT, "@asyn($(PORT)) JSON:INT $(TOPIC_ROOT)/json/writeTemplate")
+}

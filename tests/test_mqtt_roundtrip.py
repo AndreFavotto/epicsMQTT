@@ -73,7 +73,14 @@ def _put_and_wait(context, output_pv, input_pv, value, timeout=10.0):
         ("mqtt:test:StringOutput", "mqtt:test:StringInput", "epicsMQTT-ci"),
         ("mqtt:test:IntArrayOutput", "mqtt:test:IntArrayInput", [1, 2, 3, 4, 5]),
         ("mqtt:test:FloatArrayOutput", "mqtt:test:FloatArrayInput", [1.1, 2.2, 3.3, 4.4, 5.5]),
-    ],
+        ("mqtt:test:JsonInt32Output", "mqtt:test:JsonInt32Input", 42),
+        ("mqtt:test:JsonFloat64Output", "mqtt:test:JsonFloat64Input", 3.14159),
+        ("mqtt:test:JsonStringOutput", "mqtt:test:JsonStringInput", "epicsMQTT-ci"),
+        ("mqtt:test:JsonIntArrayOutput", "mqtt:test:JsonIntArrayInput", [1, 2, 3, 4, 5]),
+        ("mqtt:test:JsonFloatArrayOutput", "mqtt:test:JsonFloatArrayInput", [1.1, 2.2, 3.3, 4.4, 5.5]),
+        ("mqtt:test:JsonAltAddressOutput", "mqtt:test:JsonAltAdressInput", 43),
+        ("mqtt:test:JsonTemplateOutput", "mqtt:test:JsonTemplateInput", 44),
+     ],
 )
 def test_round_trip_via_broker(pva_context, output_pv, input_pv, value):
     _put_and_wait(pva_context, output_pv, input_pv, value)

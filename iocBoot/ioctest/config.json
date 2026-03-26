@@ -1,0 +1,31 @@
+{
+  "epicsMQTT/ci/test/json/int": {
+    "fields": {"VAL": ""},
+    "template": null
+  },
+  "epicsMQTT/ci/test/json/float": {
+    "fields": {"VAL": ""},
+    "template": null
+  },
+  "epicsMQTT/ci/test/json/string": {
+    "fields": {"VAL": ""},
+    "template": null
+  },
+  "epicsMQTT/ci/test/json/intarray": {
+    "fields": {"VAL": ""},
+    "template": null
+  },
+  "epicsMQTT/ci/test/json/floatarray": {
+    "fields": {"VAL": ""},
+    "template": null
+  },
+  "epicsMQTT/ci/test/json/altAddress": {
+    "writeAddress": "epicsMQTT/ci/test/json/altAddress2",
+    "fields": {"VAL": ""},
+    "template": null
+  },
+  "epicsMQTT/ci/test/json/writeTemplate": {
+    "fields": {"VAL": "/2/key"},
+    "template": [0, 1, {"key": null}]
+  }
+}
