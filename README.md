@@ -22,7 +22,7 @@ Contributions are welcome - feel free to open issues and pull requests!
 
 - Auto-update of EPICS PVS via `I/O Intr` records;
 - Support for read/write flat MQTT topics (i.e, topics where the payload is a single value or array);
-- Support for reading arbitrarily nested fields from JSON topic payloads;
+- Support for read/write JSON payloads with JSON pointer;
 - Support for MQTT QoS levels;
 - Checks and reject invalid messages (based mostly on type-checking);
 - Auto reconnection of broker;
@@ -58,7 +58,7 @@ device support. For now, the supported interfaces are the following:
      [these](https://github.com/eclipse-paho/paho.mqtt.cpp?tab=readme-ov-file#build-the-paho-c-and-paho-c-libraries-together)
      instructions.
 
-  > Note: AutoparamDriver explicitly requires EPICS >= 7.0, see 
+  > Note: AutoparamDriver explicitly requires EPICS >= 7.0, see
   > [reference](https://github.com/Cosylab/autoparamDriver/blob/main/autoparamDriverSup/src/Makefile#L15). For this reason,
   > this module requires EPICS 7.0 or later to be built and used.
 
@@ -117,9 +117,8 @@ Where:
 - `<FORMAT>` is the format of the payload: `FLAT` or `JSON`.
 - `<TYPE>` is the general type of the expected value [`INT|FLOAT|DIGITAL|STRING|INTARRAY|FLOATARRAY`].
 - `<TOPIC>` is the MQTT topic to which the record will be subscribed/published.
-- `<FIELD>` is the dot-separated path to the field to extract from a JSON payload (e.g. `sensor.temperature`). Arbitrary nesting is supported. Required when `FORMAT` is `JSON`.
 
-> **Note on JSON write support:** Writing to JSON-formatted topics is currently **not supported**. At the moment the driver has no way of knowing the JSON structure expected by the broker ahead of time for write records. For this reason, only `FLAT` format can be used for output records.
+> **Note on JSON support:** A configuration file must be loaded by specifying a .json configuration file using mqttJsonDriverConfigure command
 
 **Important: Due to the pub/sub nature of MQTT, ALL input records are expected to be `I/O Intr`.**
 
@@ -162,6 +161,43 @@ Example:
   iocInit()
 ```
 
+## JSON configuration file
+
+JSON records use a configuration file that specifies how to parse or compose
+a JSON string. The configuration file should have 1 JSON object in its root.
+Each item in this root object refers to an MQTT topic, specified in INP/OUT
+field in a EPICS database record.
+
+```json
+{
+  "readonly_message_root": {
+    "fields": {"VAL": ""}
+  },
+  "readonly_message_dict": {
+    "fields": {"VAL": "/1/path/to/key"}
+  },
+  "write": {
+    "fields": {"VAL": "/0"},
+    "template": [null, {"metadata": "md_content"}]",
+    "writeAddress": "example/write"
+  }
+}
+
+```
+
+In the JSON snippet above, if all three records received a MQTT message with
+string `[3, {"path": {"to": {"key": 2}}}]`, this would be the read result:
+
+- `readonly_message_root`: [3, {"path": {"to": {"key": 2}}}]
+- `readonly_message_dict`: 2
+
+For writing,
+
+- `write` would send a message with content `["payload", {"metadata": "md_content"}]`
+  if it used a string record and write value was "payload". Since writeAddress
+  was specified, it would send the message into topic "example/write". Otherwise,
+  the default write topic is identical to the read topic, "write".
+
 ## Implementation status
 
 Below are the supported interfaces and their implementation status.
@@ -175,10 +211,12 @@ Below are the supported interfaces and their implementation status.
 | Strings             | asynOctetRead/asynOctetWrite           | `FLAT:STRING`               | Read / Write | Supported |
 | Integer Array       | asynInt32ArrayIn/asynInt32ArrayOut     | `FLAT:INTARRAY`             | Read / Write | Supported |
 | Float Array         | asynFloat64ArrayIn/asynFloat64ArrayOut | `FLAT:FLOATARRAY`           | Read / Write | Supported |
-| Integer             | asynInt32                              | `JSON:INT`                  | Read only    | Supported |
-| Float               | asynFloat64                            | `JSON:FLOAT`                | Read only    | Supported |
-| Bit masked          | asynUInt32Digital                      | `JSON:DIGITAL`              | Read only    | Supported |
-| String              | asynOctetRead                          | `JSON:STRING`               | Read only    | Supported |
+| Integer             | asynInt32                              | `JSON:INT`                  | Read / Write | Supported |
+| Float               | asynFloat64                            | `JSON:FLOAT`                | Read / Write | Supported |
+| Bit masked          | asynUInt32Digital                      | `JSON:DIGITAL`              | Read / Write | Supported |
+| String              | asynOctetRead                          | `JSON:STRING`               | Read / Write | Supported |
+| Integer Array       | asynInt32ArrayIn/asynInt32ArrayOut     | `JSON:INTARRAY`             | Read / Write | Supported |
+| Float Array         | asynFloat64ArrayIn/asynFloat64ArrayOut | `JSON:FLOATARRAY`           | Read / Write | Supported |
 
 ## Licensing Terms
 

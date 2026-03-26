@@ -17,6 +17,7 @@
 
 using namespace Autoparam::Convenience;
 using json = nlohmann::json;
+using std::to_string;
 
 static const char* driverName = "MqttDriver";
 
@@ -24,6 +25,7 @@ class MqttDriver : public Autoparam::Driver {
 public:
   /* Constructor */
   MqttDriver(const char* portName, const char* mqttBrokerAddr, const char* mqttClientID, const int qos);
+  MqttDriver(const char* portName, const char* mqttBrokerAddr, const char* mqttClientID, const int qos, const char* configFile);
   /* Destructor */
   ~MqttDriver();
   /*! \brief Supported types for MQTT topics.
@@ -59,7 +61,7 @@ private:
   DeviceAddress* parseDeviceAddress(std::string const& function, std::string const& arguments);
   DeviceVariable* createDeviceVariable(DeviceVariable* baseVar);
   /* helper methods */
-  static const json* findJsonField(const json& payload, const std::string& targetKey);
+  static std::string composeJsonWrite(MqttDriver* deviceVar, std::string& topicName, json value);
   static bool isInteger(const std::string& s, bool isSigned = true);
   static bool isBoolean(const std::string& s);
   static bool isFloat(const std::string& s);
@@ -68,6 +70,7 @@ private:
   static bool isValidTopicName(const std::string& topicName);
   static asynStatus checkAndParseIntArray(const std::string& s, std::vector<epicsInt32>& out);
   static asynStatus checkAndParseFloatArray(const std::string& s, std::vector<epicsFloat64>& out);
+  json jsonConfig;
 };
 
 class MqttTopicAddr : public DeviceAddress {
@@ -76,9 +79,10 @@ public:
 
   TopicFormat format;
   std::string topicName;
-  std::string jsonField;
+  std::string writeAddress;
   epicsUInt32 mask = 0xFFFFFFFF;
   bool operator==(DeviceAddress const& comparedAddr) const;
+  bool writeable;
 };
 
 class MqttTopicVariable : public DeviceVariable {

@@ -20,7 +20,7 @@ epicsEnvSet("P", "mqtt:test:")
 epicsEnvSet("R", "")
 epicsEnvSet("TOPIC_ROOT", "$(MQTT_TEST_TOPIC_ROOT=epicsMQTT/ci/test)")
 
-mqttDriverConfigure($(PORT), $(BROKER_URL), $(CLIENT_ID), $(QOS))
+mqttJsonDriverConfigure($(PORT), $(BROKER_URL), $(CLIENT_ID), $(QOS), "${TOP}/iocBoot/ioctest/config.json")
 
 ## Load test records
 dbLoadRecords("db/mqttTest.db", "P=$(P),R=$(R),PORT=$(PORT),TOPIC_ROOT=$(TOPIC_ROOT)")

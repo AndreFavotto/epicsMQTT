@@ -2,7 +2,9 @@
 // Copyright (C) 2026 André Favoto
 
 #include "drvMqtt.h"
+#include "asynDriver.h"
 #include "mqttClient.h"
+#include <fstream>
 
 // Supported type definitions
 
@@ -42,63 +44,49 @@ const std::unordered_set<std::string> MqttDriver::supportedTopicTypes = {
 bool MqttTopicAddr::operator==(DeviceAddress const& comparedAddr) const {
   const MqttTopicAddr& cmp = static_cast<const MqttTopicAddr&>(comparedAddr);
   if (format != cmp.format) return false;
-  switch (format) {
-    case FLAT:
-      return topicName == cmp.topicName;
-    case JSON:
-      return topicName == cmp.topicName && jsonField == cmp.jsonField;
-  }
-  return false;
+  return topicName == cmp.topicName;
 }
 
 DeviceAddress* MqttDriver::parseDeviceAddress(std::string const& function, std::string const& arguments) {
   const char* functionName = __FUNCTION__;
-  MqttTopicAddr* addr = new MqttTopicAddr;
-  if (!isSupportedTopicType(function)) {
-    fprintf(stderr, "%s::%s: Invalid topic type: %s\n", driverName, functionName, function.c_str());
-    delete addr;
-    return nullptr;
-  }
+  MqttTopicAddr::TopicFormat format;
+  std::string topicName = arguments;
   auto colonPos = function.find(':');
   std::string prefix = function.substr(0, colonPos);
+  std::string writeAddress = topicName;
+  bool writable = true;
+
+  if (!isSupportedTopicType(function)) {
+    fprintf(stderr, "%s::%s: Invalid topic type: %s\n", driverName, functionName, function.c_str());
+    return nullptr;
+  }
+  if (!isValidTopicName(topicName)) {
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Invalid topic name: %s", driverName, functionName, topicName.c_str());
+    return nullptr;
+  }
   if (prefix == FLAT_FUNC_PREFIX) {
-    std::string topicName = arguments;
-    if (!isValidTopicName(topicName)) {
-      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
-      delete addr;
+    format = MqttTopicAddr::FLAT;
+  } else if (prefix == JSON_FUNC_PREFIX) {
+    if (!jsonConfig.contains(arguments)) {
+      asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Json config file does not include %s", driverName, functionName, arguments.c_str());
       return nullptr;
     }
-    addr->format = MqttTopicAddr::FLAT;
-    addr->topicName = topicName;
-  }
-  else if (prefix == JSON_FUNC_PREFIX) {
-    auto spacePos = arguments.find(' ');
-    if (spacePos == std::string::npos) {
-      fprintf(stderr, "%s::%s: JSON field not specified: %s\n", driverName, functionName, arguments.c_str());
-      delete addr;
-      return nullptr;
+    if (!this->jsonConfig[topicName].contains("template")) {
+      writable = false;
+    } else {
+      writeAddress = this->jsonConfig[topicName].value("writeAddress", topicName);
     }
-    if (spacePos + 1 >= arguments.size()) {
-      fprintf(stderr, "%s::%s: JSON field is empty: %s\n", driverName, functionName, arguments.c_str());
-      delete addr;
-      return nullptr;
-    }
-    std::string topicName = arguments.substr(0, spacePos);
-    if (!isValidTopicName(topicName)) {
-      fprintf(stderr, "%s::%s: Invalid topic name: %s\n", driverName, functionName, topicName.c_str());
-      delete addr;
-      return nullptr;
-    }
-    std::string jsonField = arguments.substr(spacePos + 1, arguments.size());
-    addr->format = MqttTopicAddr::JSON;
-    addr->topicName = topicName;
-    addr->jsonField = jsonField;
-  }
-  else {
-    delete addr;
+    format = MqttTopicAddr::JSON;
+  } else {
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: Unknown function type '%s', only JSON or FLAT is supported.", driverName, functionName, function.c_str());
     return nullptr;
   }
 
+  MqttTopicAddr* addr = new MqttTopicAddr;
+  addr->topicName = topicName;
+  addr->writeAddress = writeAddress;
+  addr->format = format;
+  addr->writeable = writable;
   return addr;
 }
 
@@ -176,6 +164,46 @@ MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* 
   registerHandlers<Array<epicsInt32>>(JSON_INTARRAY_FUNC_STR, NULL, arrayWrite, NULL);
   registerHandlers<Array<epicsFloat64>>(JSON_FLOATARRAY_FUNC_STR, NULL, arrayWrite, NULL);
 }
+
+/* MqttDriver constructor with json configFile parsing */
+MqttDriver::MqttDriver(const char* portName, const char* brokerUrl, const char* mqttClientID, const int qos, const char* configFile)
+  : MqttDriver(portName, brokerUrl, mqttClientID, qos)
+{
+  std::ifstream file(configFile, std::ios::in);
+  if (!file.is_open()) {
+    throw std::runtime_error("Unable to open JSON config file: " + std::string(configFile));
+  }
+  json content = json::parse(file);
+
+  // ensure that json config file has the expected structure
+  for (auto [topicName, topic]: content.items()) {
+    if (!topic.is_object()) {
+      throw std::runtime_error("JSON config for MQTT topic " + topicName + " could not be parsed as json object");
+    }
+    if (!topic.contains("fields") || !topic["fields"].is_object()) {
+      throw std::runtime_error("JSON field config for " + topicName + " is missing or is not a JSON object");
+    }
+    if (topic.contains("writeAddress")) {
+      if (!topic["writeAddress"].is_string()) {
+        throw std::runtime_error("Write address for topic " + topicName + " was not a string");
+      }
+    } else {
+      // fall back (read and write into the same address)
+      topic["writeAddress"] = topicName;
+    }
+    if (topic.contains("template")) {
+      // if template exists, verify that every field can be mapped into the field.
+      for (auto [fieldName, field]: topic["fields"].items()) {
+        if (!topic["template"].contains(json::json_pointer(field))) {
+          throw std::runtime_error("JSON template for " + topicName + " does not include " + fieldName);
+        }
+      }
+    }
+    asynPrint(pasynUserSelf, ASYN_TRACE_FLOW, "Identified JSON configuration for %s\n", topicName.c_str());
+  }
+  jsonConfig = content;
+}
+
 /* Class destructor
    - Disconnects from the broker and cleans session
 */
@@ -255,19 +283,15 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
       continue;
     if (addr.format == MqttTopicAddr::JSON) {
       try {
+        if (!pself->jsonConfig.contains(topic)) continue;
+        std::string value_pointer = pself->jsonConfig[topic]["/fields/VAL"_json_pointer];
         json root = json::parse(payload);
-        const json* fieldAddr = findJsonField(root, addr.jsonField);
-        if (!fieldAddr || fieldAddr->is_null())
-          throw std::invalid_argument("JSON field not found: " + addr.jsonField);
-        if (fieldAddr->is_string())
-          val = fieldAddr->get<std::string>();
-        else
-          val = fieldAddr->dump();
+        val = to_string(root[json::json_pointer(value_pointer)]);
       }
       catch (const std::exception& e) {
         asynPrint(pself->pasynUserSelf, ASYN_TRACE_ERROR,
-          "%s::%s: Failed to parse JSON payload for topic '%s', field '%s': %s\n",
-          driverName, functionName, topic.c_str(), addr.jsonField.c_str(), e.what());
+          "%s::%s: Failed to parse JSON payload for topic '%s' : %s\n",
+          driverName, functionName, topic.c_str(), e.what());
         continue;
       }
     }
@@ -335,28 +359,6 @@ void MqttDriver::onMessageCb(Autoparam::Driver* driver, const std::string& topic
 }
 //#############################################################################################
 // Helper methods
-
-// Recursively search for a key anywhere in the JSON structure
-const json* MqttDriver::findJsonField(const json& payload, const std::string& targetKey) {
-  if (payload.is_object()) {
-    for (auto it = payload.begin(); it != payload.end(); ++it) {
-      if (it.key() == targetKey) {
-        return &it.value();
-      }
-      else {
-        const json* found = findJsonField(it.value(), targetKey);
-        if (found) return found;
-      }
-    }
-  }
-  else if (payload.is_array()) {
-    for (const auto& el : payload) {
-      const json* found = findJsonField(el, targetKey);
-      if (found) return found;
-    }
-  }
-  return nullptr;
-}
 
 /* Checks if a string corresponds to one of the supported topic types */
 bool MqttDriver::isSupportedTopicType(const std::string& type) {
@@ -567,6 +569,23 @@ asynStatus MqttDriver::checkAndParseFloatArray(const std::string& s, std::vector
   return asynSuccess;
 }
 
+/* Shared JSON compose helper method. Returns a string to be sent via MQTT */
+std::string MqttDriver::composeJsonWrite(MqttDriver* driver, std::string& topicName, json value) {
+  json data = driver->jsonConfig[topicName]["template"];
+  try {
+    auto& fields = driver->jsonConfig[topicName]["fields"];
+    if (fields.contains("VAL")) {
+      data[json::json_pointer(fields["VAL"])] = value;
+    }
+  } catch (const json::exception& exc) {
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR, "Failed to compose Json write for %s\n", topicName.c_str());
+    throw;
+  }
+  auto text = data.dump();
+  asynPrint(driver->pasynUserSelf, ASYN_TRACE_FLOW, "Composed data with content: %s\n", text.c_str());
+  return text;
+}
+
 //#############################################################################################
 // IO function definitions
 
@@ -577,14 +596,21 @@ WriteResult MqttDriver::integerWrite(DeviceVariable& deviceVar, epicsInt32 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
-      driver->mqttClient.publish(addr.topicName, std::to_string(value));
+      driver->mqttClient.publish(addr.writeAddress, std::to_string(value));
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
-      // TODO: implement JSON support for integer values
-      throw std::logic_error("JSON support not implemented");
+      auto text = composeJsonWrite(driver, topicName, value);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -605,6 +631,13 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
   epicsUInt32 outVal = value;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
       if (mask != 0xFFFFFFFF) {
@@ -621,12 +654,12 @@ WriteResult MqttDriver::digitalWrite(DeviceVariable& deviceVar, epicsUInt32 cons
         auxVal &= (value | ~mask);
         outVal = auxVal;
       }
-      driver->mqttClient.publish(addr.topicName, std::to_string(outVal));
+      driver->mqttClient.publish(addr.writeAddress, std::to_string(outVal));
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
-      // TODO: implement JSON support for digital values
-      throw std::logic_error("JSON support not implemented");
+      auto text = composeJsonWrite(driver, topicName, value);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -646,14 +679,21 @@ WriteResult MqttDriver::floatWrite(DeviceVariable& deviceVar, epicsFloat64 value
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
-      driver->mqttClient.publish(addr.topicName, std::to_string(value));
+      driver->mqttClient.publish(addr.writeAddress, std::to_string(value));
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
-      // TODO: implement JSON support for float values
-      throw std::logic_error("JSON support not implemented");
+      auto text = composeJsonWrite(driver, topicName, value);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -674,22 +714,32 @@ WriteResult MqttDriver::arrayWrite(DeviceVariable& deviceVar, Array<epicsDataTyp
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
+    const epicsDataType* arrayData = reinterpret_cast<const epicsDataType*>(value.data());
+    size_t count = value.size();
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
-      const epicsDataType* arrayData = reinterpret_cast<const epicsDataType*>(value.data());
-      size_t count = value.size();
-
       std::ostringstream oss;
       for (size_t i = 0; i < count; ++i) {
         if (i > 0) oss << ",";
         oss << arrayData[i];
       }
-      driver->mqttClient.publish(topicName, oss.str());
+      driver->mqttClient.publish(addr.writeAddress, oss.str());
       status = asynSuccess;
     }
     else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
-      // TODO: implement JSON support for array values
-      throw std::logic_error("JSON support not implemented");
+      json data = json::array();
+      for (size_t i = 0; i < count; ++i) {
+        data.push_back(arrayData[i]);
+      }
+      auto text = composeJsonWrite(driver, topicName, data);
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -709,17 +759,22 @@ WriteResult MqttDriver::stringWrite(DeviceVariable& deviceVar, Octet const& valu
   MqttTopicAddr const& addr = static_cast<MqttTopicAddr const&>(deviceVar.address());
   std::string topicName = addr.topicName;
   MqttDriver* driver = static_cast<MqttTopicVariable&>(deviceVar).driver;
+  std::vector<char> stringData(value.maxSize());
+  value.writeTo(stringData.data(), stringData.size());
+  if (!addr.writeable) {
+    result.status = asynError;
+    asynPrint(driver->pasynUserSelf, ASYN_TRACE_ERROR,
+      "%s::%s: Write was requested for topic '%s' which is not writeable)\n",
+      driverName, functionName, topicName.c_str());
+    return result;
+  }
   try {
     if (addr.format == MqttTopicAddr::TopicFormat::FLAT) {
-      std::vector<char> stringData(value.maxSize());
-      if (value.writeTo(stringData.data(), stringData.size())) {
-        driver->mqttClient.publish(addr.topicName, stringData.data());
-        status = asynSuccess;
-      }
-    }
-    else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
-      // TODO: implement JSON support for string values
-      throw std::logic_error("JSON support not implemented");
+      driver->mqttClient.publish(addr.writeAddress, stringData.data());
+      status = asynSuccess;
+    } else if (addr.format == MqttTopicAddr::TopicFormat::JSON) {
+      auto text = composeJsonWrite(driver, topicName, stringData.data());
+      driver->mqttClient.publish(addr.writeAddress, text);
     }
   }
   catch (const std::exception& exc) {
@@ -738,36 +793,51 @@ extern "C" {
     new MqttDriver(portName, brokerUrl, mqttClientID, qos);
     return(asynSuccess);
   }
+  int mqttJsonDriverConfigure(const char* portName, const char* brokerUrl, const char* mqttClientID, const int qos, const char* configFile) {
+    new MqttDriver(portName, brokerUrl, mqttClientID, qos, configFile);
+    return(asynSuccess);
+  }
   static const int numArgs = 4;
   static const iocshArg initArg0 = { "portName", iocshArgString };
   static const iocshArg initArg1 = { "brokerUrl", iocshArgString };
   static const iocshArg initArg2 = { "mqttClientID", iocshArgString };
   static const iocshArg initArg3 = { "qos", iocshArgInt };
+  static const iocshArg initArg4 = { "configFile", iocshArgString };
   static const iocshArg* const initArgs[] = {
       &initArg0,
       &initArg1,
       &initArg2,
-      &initArg3
+      &initArg3,
+      &initArg4
   };
   static const char* usage =
     "MqttDriverConfigure(portName, brokerUrl, mqttClientID, qos)\n"
     "  portName: Asyn port name to be used\n"
     "  brokerUrl: Broker IP or hostname (e.g: mqtt://localhost:1883)\n"
     "  mqttClientID: ClientID to be used - must be unique\n"
-    "  qos: Desired quality of service (QoS) for the connection [0|1|2]\n";
+    "  qos: Desired quality of service (QoS) for the connection [0|1|2]\n"
+    "  [configFile]: path to JSON configuration file";
 
   //#############################################################################################
   static const iocshFuncDef initFuncDef = { "mqttDriverConfigure", numArgs, initArgs, usage };
+  static const iocshFuncDef jsonInitFuncDef = { "mqttJsonDriverConfigure", 5, initArgs, usage };
 
   //#############################################################################################
   static void initCallFunc(const iocshArgBuf* args) {
     mqttDriverConfigure(args[0].sval, args[1].sval, args[2].sval, args[3].ival);
+  }
+  static void jsonInitCallFunc(const iocshArgBuf* args) {
+    mqttJsonDriverConfigure(args[0].sval, args[1].sval, args[2].sval, args[3].ival, args[4].sval);
   }
 
   //#############################################################################################
   void mqttDriverRegister(void) {
     iocshRegister(&initFuncDef, initCallFunc);
   }
+  void mqttJsonDriverRegister(void) {
+    iocshRegister(&jsonInitFuncDef, jsonInitCallFunc);
+  }
 
   epicsExportRegistrar(mqttDriverRegister);
+  epicsExportRegistrar(mqttJsonDriverRegister);
 }
