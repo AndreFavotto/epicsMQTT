@@ -126,7 +126,7 @@ Where:
 
 **Important: Due to the pub/sub nature of MQTT, ALL input records are expected to be `I/O Intr`.**
 
-Example:
+Example (no formatting):
 
 ```console
 record(ai, "$(P)$(R)AnalogIn"){
@@ -140,6 +140,38 @@ record(ai, "$(P)$(R)AnalogOut"){
   field(DESC, "Analog Output Record")
   field(DTYP, "asynInt32")
   field(OUT, "@asyn($(PORT)) FLAT:INT test/analogtopic")
+}
+```
+
+Example (with formatting):
+
+```console
+# Device sends a JSON array as input, where this record handles the 0-th item
+record(ai, "$(P)$(R)Example-RB") {
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT)) JSON:FLOAT $(MQTT_TOPIC)/get /0")
+    field(SCAN, "I/O Intr")
+}
+
+# User may set a value through this record
+record(ao, "$(P)$(R)Example-SP") {
+    field(FLNK, "$(P)$(R)#Example-Fmt")
+}
+
+# When user sets a value, scalcout is used to convert value into expected JSON
+# format. There is length limit in CALC field, so it may be necessary to split
+# formatting into multiple scalcout records.
+record(scalcout, "$(P)$(R)#Example-Fmt") {
+    field(INPA, "$(P)$(R)Example-SP")
+    field(CALC, "'['+printf('$(FORMATTER)',A)+']\n'")
+    field(OUT,  "$(P)$(R)#Example-TX")
+    field(FLNK, "$(P)$(R)#Example-TX")
+}
+
+# Use an intermediate stringout record if asyn is not built with calc support
+record(stringout, "$(P)$(R)#Example-TX") {
+    field(DTYP, "asynOctetWrite")
+    field(OUT,  "@asyn($(PORT)) FLAT:STRING $(MQTT_TOPIC)/set")
 }
 ```
 
